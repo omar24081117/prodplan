@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { Leaf, LayoutDashboard, CalendarDays, Play, ClipboardCheck, BookOpen, Users, UserCog, Settings, LogOut, FlaskConical } from 'lucide-react'
+import { Leaf, LayoutDashboard, CalendarDays, Play, ClipboardCheck, BookOpen, Users, UserCog, Settings, LogOut, FlaskConical, AlertTriangle } from 'lucide-react'
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -32,6 +32,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
               { href: '/admin/asistencia', icon: <ClipboardCheck size={14} />, label: 'Asistencia' },
               { href: '/admin/catalogo', icon: <BookOpen size={14} />, label: 'Catálogo' },
               { href: '/admin/base-procesos', icon: <FlaskConical size={14} />, label: 'Base Procesos' },
+              { href: '/admin/causales-paro', icon: <AlertTriangle size={14} />, label: 'Causales Paro' },
               { href: '/admin/personal', icon: <Users size={14} />, label: 'Personal' },
               { href: '/admin/usuarios', icon: <UserCog size={14} />, label: 'Usuarios' },
             ].map(item => (

@@ -54,6 +54,7 @@ export default function EjecucionPage() {
   const [cantidad, setCantidad] = useState('')
   const [tiempoImprod, setTiempoImprod] = useState('')
   const [observacion, setObservacion] = useState('')
+  const [causales, setCausales] = useState<string[]>([])
   const [loteVal, setLoteVal] = useState('')
   const [asistenciaHoy, setAsistenciaHoy] = useState<Asistente[]>([])
   const [savingPersona, setSavingPersona] = useState<string | null>(null)
@@ -67,6 +68,12 @@ export default function EjecucionPage() {
   useEffect(() => {
     fetch('/api/auth/sesion').then(r => r.json())
       .then(data => { if (data.operario) setOperario(data.operario) }).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/causales-paro').then(r => r.json())
+      .then(d => { if (Array.isArray(d)) setCausales(d.filter((c: { activo: boolean }) => c.activo).map((c: { nombre: string }) => c.nombre)) })
+      .catch(() => {})
   }, [])
 
   const cargarReportes = useCallback(async (id: string) => {
@@ -478,9 +485,19 @@ export default function EjecucionPage() {
               </div>
               <div className="flex flex-col">
                 <label className="text-gray-400 text-xs block mb-1">Observación</label>
-                <input type="text" placeholder="Causa del paro..."
-                  value={observacion} onChange={e => setObservacion(e.target.value)}
-                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-green-500 flex-1" />
+                {causales.length > 0 ? (
+                  <select
+                    value={observacion} onChange={e => setObservacion(e.target.value)}
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-green-500 flex-1"
+                  >
+                    <option value="">Seleccionar causa...</option>
+                    {causales.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                ) : (
+                  <input type="text" placeholder="Causa del paro..."
+                    value={observacion} onChange={e => setObservacion(e.target.value)}
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-green-500 flex-1" />
+                )}
               </div>
             </div>
 
