@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
-import { Plus, Trash2, Pencil, Check, X, ChevronDown, Search, BookOpen } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Plus, Trash2, Pencil, Check, X, ChevronDown, Search, BookOpen, Upload, FileSpreadsheet } from 'lucide-react'
 
 const PROCESOS = [
   'FABRICAR', 'TROQUELAR', 'SOPLAR ENV', 'ETIQUETAR', 'ENVASAR',
@@ -48,6 +48,9 @@ export default function BaseProcesosPage() {
   const [error, setError] = useState('')
   const [skuSearch, setSkuSearch] = useState('')
   const [productoSeleccionado, setProductoSeleccionado] = useState<Catalogo | null>(null)
+  const [importando, setImportando] = useState(false)
+  const [importResult, setImportResult] = useState<{ ok?: boolean; total?: number; productosNuevos?: number; procesosEncontrados?: string[]; error?: string } | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
 
   const cargar = useCallback(async () => {
     const [catRes, bpRes] = await Promise.all([
@@ -155,6 +158,26 @@ export default function BaseProcesosPage() {
     cargar()
   }
 
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setImportando(true)
+    setImportResult(null)
+    try {
+      const fd = new FormData()
+      fd.append('archivo', file)
+      const res = await fetch('/api/base-procesos/import', { method: 'POST', body: fd })
+      const data = await res.json()
+      setImportResult(data)
+      if (res.ok) cargar()
+    } catch {
+      setImportResult({ error: 'Error de conexión al importar' })
+    } finally {
+      setImportando(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
+
   function formatHoras(estandar: number): string {
     if (estandar <= 0) return '—'
     return `${estandar.toLocaleString('es-CO')} und/h·persona`
@@ -174,14 +197,56 @@ export default function BaseProcesosPage() {
             Estándares de producción por producto y proceso · {registros.length} definidos
           </p>
         </div>
-        <button
-          onClick={abrirNuevo}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-white transition-all hover:scale-[1.02]"
-          style={{ background: 'linear-gradient(135deg,#2e6e20,#3d8830)', border: '1px solid #5aaa40' }}
-        >
-          <Plus size={16} /> Nuevo estándar
-        </button>
+        <div className="flex gap-2 flex-wrap">
+          {/* Importar Excel */}
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={importando}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-white transition-all hover:scale-[1.02] disabled:opacity-50"
+            style={{ background: 'linear-gradient(135deg,#1e5c6e,#1e7890)', border: '1px solid #30a0cc' }}
+          >
+            {importando
+              ? <><span className="inline-block w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" /> Importando...</>
+              : <><Upload size={15} /> Importar Excel</>
+            }
+          </button>
+          <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleImport} className="hidden" />
+
+          <button
+            onClick={abrirNuevo}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm text-white transition-all hover:scale-[1.02]"
+            style={{ background: 'linear-gradient(135deg,#2e6e20,#3d8830)', border: '1px solid #5aaa40' }}
+          >
+            <Plus size={16} /> Nuevo estándar
+          </button>
+        </div>
       </div>
+
+      {/* Resultado importación */}
+      {importResult && (
+        <div className={`rounded-xl px-4 py-3 text-sm flex items-start gap-3 ${importResult.ok ? 'text-emerald-300' : 'text-red-400'}`}
+          style={{ background: importResult.ok ? '#0d2a1a' : '#2a0a0a', border: `1px solid ${importResult.ok ? '#2a6e3a' : '#6a2020'}` }}>
+          <FileSpreadsheet size={18} className="shrink-0 mt-0.5" />
+          <div className="space-y-0.5">
+            {importResult.ok ? (
+              <>
+                <p className="font-semibold">✓ {importResult.total} estándares importados correctamente</p>
+                {(importResult.productosNuevos ?? 0) > 0 && (
+                  <p className="text-emerald-400/70 text-xs">{importResult.productosNuevos} productos nuevos agregados al catálogo</p>
+                )}
+                {importResult.procesosEncontrados && (
+                  <p className="text-emerald-400/70 text-xs">Procesos: {importResult.procesosEncontrados.join(', ')}</p>
+                )}
+              </>
+            ) : (
+              <p>{importResult.error}</p>
+            )}
+          </div>
+          <button onClick={() => setImportResult(null)} className="ml-auto text-current opacity-50 hover:opacity-100">
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Formulario */}
       {showForm && (
@@ -420,6 +485,13 @@ export default function BaseProcesosPage() {
         <p>• <strong className="text-gray-300">Tiempo estimado</strong> = META ÷ (Estándar × TRIP). Si no hay TRIP asignado, se usa TRIP = 1.</p>
         <p>• <strong className="text-gray-300">TRIP</strong>: número de personas asignadas a la actividad en la planeación.</p>
         <p>• El tiempo estimado se calcula automáticamente al planear y al asignar personal en ejecución.</p>
+        <div className="mt-2 pt-2 border-t border-gray-800 space-y-1">
+          <p className="text-gray-400 font-semibold">Formato Excel para importar:</p>
+          <p>• El archivo debe tener <strong className="text-gray-300">encabezados de proceso</strong> (ej: ENVASADO/TROQUELADO, ETIQUETADO) y debajo columnas <strong className="text-gray-300">UND/H · UND/D · UND/M</strong>.</p>
+          <p>• Solo se importa la columna <strong className="text-gray-300">UND/H</strong> de cada proceso.</p>
+          <p>• La primera columna debe ser <strong className="text-gray-300">Referencia</strong> (SKU) y la segunda <strong className="text-gray-300">Desc. Item</strong>.</p>
+          <p>• Los productos no encontrados en el catálogo se agregan automáticamente.</p>
+        </div>
       </div>
     </div>
   )
