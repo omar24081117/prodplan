@@ -12,6 +12,13 @@ export async function GET() {
   return NextResponse.json(data)
 }
 
+export async function DELETE() {
+  const supabase = await createClient()
+  const { error } = await supabase.from('catalogo').delete().neq('sku', '')
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  return NextResponse.json({ ok: true })
+}
+
 export async function POST(request: NextRequest) {
   const body = await request.json()
   const supabase = await createClient()

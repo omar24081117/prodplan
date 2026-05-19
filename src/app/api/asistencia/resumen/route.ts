@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 export async function GET() {
   const supabase = await createClient()
 
-  const fecha = new Date().toLocaleDateString('en-CA')
+  const fecha = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
 
   const { count } = await supabase
     .from('asistencia')

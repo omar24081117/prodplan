@@ -12,6 +12,8 @@ export default function CatalogoPage() {
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [cargando, setCargando] = useState(false)
+  const [cargaMsg, setCargaMsg] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const cargar = useCallback(async () => {
@@ -48,37 +50,63 @@ export default function CatalogoPage() {
     cargar()
   }
 
+  async function eliminarTodo() {
+    if (!confirm(`¿Eliminar todos los ${productos.length} productos del catálogo? Esta acción no se puede deshacer.`)) return
+    const res = await fetch('/api/catalogo', { method: 'DELETE' })
+    if (res.ok) { setCargaMsg('✓ Catálogo eliminado'); cargar() }
+    else { const d = await res.json(); setCargaMsg('❌ ' + (d.error || 'Error al eliminar')) }
+  }
+
   async function importarExcel(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    const data = await file.arrayBuffer()
-    const wb = XLSX.read(data)
-    const ws = wb.Sheets[wb.SheetNames[0]]
-    const rows: Record<string, string>[] = XLSX.utils.sheet_to_json(ws)
-    const payload = rows
-      .filter(r => r.SKU || r.sku)
-      .map(r => ({ sku: String(r.SKU || r.sku).trim(), nombre: String(r.Nombre || r.nombre || '').trim() }))
+    setCargando(true)
+    setCargaMsg('')
+    try {
+      const data = await file.arrayBuffer()
+      const wb = XLSX.read(data)
+      const ws = wb.Sheets[wb.SheetNames[0]]
+      const rows: Record<string, string>[] = XLSX.utils.sheet_to_json(ws)
+      const raw = rows
+        .filter(r => r.SKU || r.sku)
+        .map(r => ({ sku: String(r.SKU || r.sku).trim(), nombre: String(r.Nombre || r.nombre || '').trim() }))
+        .filter(r => r.sku)
 
-    if (payload.length === 0) { alert('No se encontraron filas válidas (columnas: SKU, Nombre)'); return }
+      // Deduplicar por SKU (quedarse con la última aparición)
+      const seen = new Map<string, { sku: string; nombre: string }>()
+      for (const r of raw) seen.set(r.sku, r)
+      const payload = Array.from(seen.values())
 
-    await fetch('/api/catalogo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    })
-    cargar()
-    if (fileRef.current) fileRef.current.value = ''
-  }
+      if (payload.length === 0) { setCargaMsg('❌ No se encontraron filas válidas. Verifica que tenga columnas SKU y Nombre.'); return }
 
-  function exportar() {
-    const ws = XLSX.utils.json_to_sheet(productos.map(p => ({ SKU: p.sku, Nombre: p.nombre })))
-    const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, 'Catalogo')
-    XLSX.writeFile(wb, 'catalogo_prodplan.xlsx')
+      const res = await fetch('/api/catalogo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (res.ok) {
+        setCargaMsg(`✓ ${payload.length} productos cargados correctamente`)
+        cargar()
+      } else {
+        const d = await res.json()
+        setCargaMsg('❌ ' + (d.error || 'Error al cargar'))
+      }
+    } catch {
+      setCargaMsg('❌ Error al leer el archivo')
+    } finally {
+      setCargando(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
   }
 
   function descargarPlantilla() {
-    const ws = XLSX.utils.json_to_sheet([{ SKU: '1001', Nombre: 'Ejemplo Producto' }])
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['SKU', 'Nombre'],
+      ['1001', 'NAT CREM HUME COCO GUAY X 1LT'],
+      ['10005', 'NAT JABO LIQU COCO GUAY X 1LT'],
+      ['9081', 'BLK JABON LIQ COC GUAY'],
+    ])
+    ws['!cols'] = [{ wch: 10 }, { wch: 40 }]
     const wb = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(wb, ws, 'Catalogo')
     XLSX.writeFile(wb, 'plantilla_catalogo.xlsx')
@@ -89,15 +117,33 @@ export default function CatalogoPage() {
       <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
         <h1 className="text-2xl font-bold text-white">Catálogo de productos</h1>
         <div className="flex gap-2 flex-wrap">
-          <button onClick={descargarPlantilla} className="text-gray-400 hover:text-white text-sm px-3 py-2 bg-gray-800 rounded-lg">⬇ Plantilla</button>
-          <label className="cursor-pointer text-gray-400 hover:text-white text-sm px-3 py-2 bg-gray-800 rounded-lg">
-            📥 Importar Excel
-            <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={importarExcel} className="hidden" />
+          <button onClick={descargarPlantilla}
+            className="flex items-center gap-1.5 text-gray-300 hover:text-white text-sm px-3 py-2 rounded-lg transition-colors"
+            style={{ background: '#1e3a14', border: '1px solid #3a6228' }}>
+            ⬇ Descargar plantilla
+          </button>
+          <label className="cursor-pointer flex items-center gap-1.5 text-white text-sm font-semibold px-3 py-2 rounded-lg transition-all hover:scale-[1.02]"
+            style={{ background: 'linear-gradient(135deg,#2e6e20,#3d8830)', border: '1px solid #5aaa40' }}>
+            ⬆ Cargar
+            <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={importarExcel} className="hidden" />
           </label>
-          <button onClick={exportar} className="text-gray-400 hover:text-white text-sm px-3 py-2 bg-gray-800 rounded-lg">📤 Exportar</button>
-          <button onClick={() => setShowForm(!showForm)} className="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-3 py-2 rounded-lg">+ Agregar</button>
+          <button onClick={() => setShowForm(!showForm)}
+            className="text-gray-300 hover:text-white text-sm font-semibold px-3 py-2 rounded-lg transition-colors"
+            style={{ background: '#1e3a14', border: '1px solid #3a6228' }}>
+            + Agregar
+          </button>
+          <button onClick={eliminarTodo}
+            className="text-red-400 hover:text-red-300 text-sm px-3 py-2 rounded-lg transition-colors"
+            style={{ background: '#1e1010', border: '1px solid #6a2020' }}>
+            🗑 Eliminar lista actual
+          </button>
         </div>
       </div>
+
+      {cargando && <p className="text-gray-400 text-sm mt-2">Cargando productos...</p>}
+      {cargaMsg && !cargando && (
+        <p className={`text-sm mt-2 ${cargaMsg.startsWith('✓') ? 'text-green-400' : 'text-red-400'}`}>{cargaMsg}</p>
+      )}
 
       {showForm && (
         <form onSubmit={guardar} className="bg-gray-900 border border-gray-700 rounded-xl p-4 mb-4 flex gap-3 flex-wrap items-end">

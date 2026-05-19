@@ -1,6 +1,11 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+function clean(val: string | undefined): string {
+  const s = val ?? ''
+  return s.charCodeAt(0) === 0xFEFF ? s.slice(1) : s
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   let response = NextResponse.next({ request })
@@ -8,8 +13,8 @@ export async function proxy(request: NextRequest) {
   // Protección /admin/* — requiere sesión Supabase Auth
   if (pathname.startsWith('/admin')) {
     const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      clean(process.env.NEXT_PUBLIC_SUPABASE_URL),
+      clean(process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY),
       {
         cookies: {
           getAll() {

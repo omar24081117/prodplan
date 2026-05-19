@@ -1,19 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+const TZ = 'America/Bogota'
+
 function getTurno(): string {
-  const hour = new Date().getHours()
+  const hour = parseInt(new Date().toLocaleString('en-US', { timeZone: TZ, hour: 'numeric', hour12: false }))
   if (hour >= 6 && hour < 14) return 'MAÑANA'
   if (hour >= 14 && hour < 22) return 'TARDE'
   return 'NOCHE'
 }
 
 function getHoraLocal(): string {
-  return new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false })
+  return new Date().toLocaleTimeString('es-CO', { timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
 function getFechaLocal(): string {
-  return new Date().toLocaleDateString('en-CA') // YYYY-MM-DD
+  return new Date().toLocaleDateString('en-CA', { timeZone: TZ })
 }
 
 export async function POST(request: NextRequest) {
@@ -42,7 +44,6 @@ export async function POST(request: NextRequest) {
   const turno = getTurno()
 
   if (tipo === 'entrada') {
-    // Verificar si ya tiene entrada hoy
     const { data: existente } = await supabase
       .from('asistencia')
       .select('id, hora_ingreso')
@@ -73,7 +74,6 @@ export async function POST(request: NextRequest) {
   }
 
   if (tipo === 'salida') {
-    // Verificar que tiene entrada y no tiene salida
     const { data: registro } = await supabase
       .from('asistencia')
       .select('id, hora_salida')

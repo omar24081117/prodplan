@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
 
   const message = await client.messages.create({
     model: 'claude-opus-4-7',
-    max_tokens: 2048,
+    max_tokens: 4096,
     messages: [
       {
         role: 'user',
@@ -33,9 +33,22 @@ export async function POST(request: NextRequest) {
           {
             type: 'text',
             text: `Extrae la tabla de planeación de producción de esta imagen.
+Las columnas pueden llamarse: PROCESO, TRIP (personal planeado), TURNO, REF o SKU, DESCRIPCION o PRODUCTO, LOTE, UND DE MEDIDA o UNIDAD, META o CANTIDAD.
+
 Devuelve SOLO un JSON válido con un array de objetos con estas claves exactas:
-[{ "sku": "texto o null", "producto": "texto", "proceso": "texto", "turno": "MAÑANA|TARDE|NOCHE", "personal_planeado": número o null, "cantidad": número, "notas": "texto o null" }]
-Si algún campo no aparece en la imagen, usa null. No añadas texto adicional, solo el JSON.`,
+[{
+  "sku": "valor de REF o null",
+  "producto": "valor de DESCRIPCION/PRODUCTO",
+  "proceso": "valor de PROCESO",
+  "turno": "MAÑANA, TARDE o NOCHE",
+  "personal_planeado": número de TRIP o null,
+  "cantidad": número de META/CANTIDAD,
+  "unidad": "valor de UND DE MEDIDA o null",
+  "lote": "valor de LOTE o null si está vacío",
+  "notas": null
+}]
+
+Si algún campo no aparece o está vacío en la imagen, usa null. No añadas texto adicional, solo el JSON.`,
           },
         ],
       },

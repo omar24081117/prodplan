@@ -24,6 +24,27 @@ export async function POST(request: NextRequest) {
     .select()
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  if (error) {
+    // Si la columna no existe aún en Supabase, reintentar sin los campos opcionales
+    const isMissingCol =
+      error.message.includes('tiempo_improductivo') ||
+      error.message.includes('observacion') ||
+      error.message.includes('column') ||
+      error.message.includes('does not exist')
+
+    if (isMissingCol) {
+      const { tiempo_improductivo, observacion, ...bodyBase } = body
+      const { data: data2, error: error2 } = await supabase
+        .from('reportes')
+        .upsert(bodyBase, { onConflict: 'actividad_id,hora' })
+        .select()
+        .single()
+      if (error2) return NextResponse.json({ error: error2.message }, { status: 400 })
+      return NextResponse.json(data2, { status: 201 })
+    }
+
+    return NextResponse.json({ error: error.message }, { status: 400 })
+  }
+
   return NextResponse.json(data, { status: 201 })
 }

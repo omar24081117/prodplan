@@ -21,6 +21,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Cédula no registrada o inactiva' }, { status: 401 })
   }
 
+  // Verificar si ya registró salida hoy
+  const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
+  const { data: asistencia } = await supabase
+    .from('asistencia')
+    .select('hora_salida')
+    .eq('cedula', cedula.trim())
+    .eq('fecha', hoy)
+    .not('hora_salida', 'is', null)
+    .maybeSingle()
+
+  if (asistencia?.hora_salida) {
+    return NextResponse.json({
+      error: `Ya registraste salida a las ${asistencia.hora_salida}. No puedes ingresar nuevamente hoy.`,
+    }, { status: 403 })
+  }
+
   const session = JSON.stringify({ cedula: operario.cedula, nombre: operario.nombre })
 
   const response = NextResponse.json({ ok: true, nombre: operario.nombre })

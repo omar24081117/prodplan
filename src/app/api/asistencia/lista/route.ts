@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
-  const fecha = searchParams.get('fecha') || new Date().toLocaleDateString('en-CA')
+  const fecha = searchParams.get('fecha') || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
   const supabase = await createClient()
 
   const { data, error } = await supabase

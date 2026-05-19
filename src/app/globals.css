@@ -1,22 +1,67 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #d4e8b8;
+  --foreground: #1a3a10;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* Fondo claro natural — el body es claro, las cards son bosque oscuro */
+  --color-gray-950: #d4e8b8;
+  --color-gray-900: #1e3a14;
+  --color-gray-800: #2a4e1c;
+  --color-gray-700: #3a6228;
+  --color-gray-600: #527840;
+  --color-gray-500: #6a9258;
+  --color-gray-400: #8aaa78;
+  --color-gray-300: #aac898;
+  --color-gray-200: #c8e0b8;
+  --color-gray-100: #e0f0d0;
+  --color-gray-50:  #f0f8e8;
+
+  /* Azul → verde bosque */
+  --color-blue-900: #0e2e08;
+  --color-blue-800: #1a4a12;
+  --color-blue-700: #246020;
+  --color-blue-600: #2e7828;
+  --color-blue-500: #3c9235;
+  --color-blue-400: #58b050;
+  --color-blue-300: #80cc78;
+  --color-blue-200: #aae0a4;
+
+  /* Púrpura → verde oliva */
+  --color-purple-900: #1a3008;
+  --color-purple-800: #284818;
+  --color-purple-700: #386028;
+  --color-purple-600: #4a7838;
+
+  /* Rojo → tierra */
+  --color-red-900: #3a1010;
+  --color-red-800: #501818;
+  --color-red-700: #6a2828;
+  --color-red-600: #883838;
+  --color-red-500: #a85050;
+  --color-red-400: #c87070;
+
+  /* Emerald — indicadores positivos */
+  --color-emerald-900: #0e2a14;
+  --color-emerald-800: #1a4024;
+  --color-emerald-700: #265834;
+  --color-emerald-600: #327044;
+  --color-emerald-500: #409858;
+  --color-emerald-400: #5ab870;
+  --color-emerald-300: #80d094;
+
+  /* Amber — lotes, advertencias */
+  --color-amber-900: #2a1a04;
+  --color-amber-800: #3e2a08;
+  --color-amber-700: #584010;
+  --color-amber-600: #7a5a1c;
+  --color-amber-400: #c09040;
+  --color-amber-300: #d4b060;
 }
 
 body {
@@ -24,3 +69,8 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #c0d8a4; }
+::-webkit-scrollbar-thumb { background: #4a7a30; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #5a9040; }
