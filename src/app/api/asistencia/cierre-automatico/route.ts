@@ -3,33 +3,36 @@ import { createClient } from '@/lib/supabase/server'
 
 const TZ = 'America/Bogota'
 
-function getFechaLocal(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: TZ })
-}
-
-function toMin(hora: string): number {
+function sumarHoras(hora: string, horas: number): string {
   const [h, m] = hora.split(':').map(Number)
-  return h * 60 + m
+  const totalMin = h * 60 + m + horas * 60
+  const hh = Math.floor(totalMin / 60) % 24
+  const mm = totalMin % 60
+  return `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
 }
 
-function horaSalidaDefault(horaIngreso: string): string | null {
-  const min = toMin(horaIngreso)
-  if (min >= toMin('05:30') && min <= toMin('07:30')) return '17:00'
-  if (min >= toMin('12:30') && min <= toMin('14:00')) return '23:00'
-  return null
+function getMinutosActuales(): number {
+  const horaStr = new Date().toLocaleTimeString('es-CO', {
+    timeZone: TZ, hour: '2-digit', minute: '2-digit', hour12: false,
+  })
+  const [h, m] = horaStr.split(':').map(Number)
+  // Si es de madrugada (< 12), se asume que cruzamos medianoche
+  return h < 12 ? (h + 24) * 60 + m : h * 60 + m
 }
 
-// POST: llamado manualmente desde el panel admin
+// POST: cierre manual desde el panel admin
 export async function POST(request: NextRequest) {
   const { fecha } = await request.json()
-  const fechaTarget = fecha || getFechaLocal()
+
+  if (!fecha) return NextResponse.json({ error: 'Fecha requerida' }, { status: 400 })
 
   const supabase = await createClient()
+  const minutosActuales = getMinutosActuales()
 
   const { data: abiertos, error } = await supabase
     .from('asistencia')
     .select('id, cedula, nombre, hora_ingreso')
-    .eq('fecha', fechaTarget)
+    .eq('fecha', fecha)
     .is('hora_salida', null)
     .not('hora_ingreso', 'is', null)
 
@@ -39,19 +42,36 @@ export async function POST(request: NextRequest) {
   }
 
   const cerrados: { nombre: string; hora_ingreso: string; hora_salida: string }[] = []
-  const sinRegla: string[] = []
+  const pendientes: { nombre: string; hora_ingreso: string; faltanMin: number }[] = []
 
   for (const reg of abiertos) {
-    const salida = horaSalidaDefault(reg.hora_ingreso)
-    if (!salida) { sinRegla.push(reg.nombre); continue }
+    const [hi, mi] = reg.hora_ingreso.split(':').map(Number)
+    const minIngreso = hi * 60 + mi
+    const minCierre = minIngreso + 12 * 60
+
+    if (minutosActuales < minCierre) {
+      pendientes.push({
+        nombre: reg.nombre,
+        hora_ingreso: reg.hora_ingreso,
+        faltanMin: minCierre - minutosActuales,
+      })
+      continue
+    }
+
+    const horaSalida = sumarHoras(reg.hora_ingreso, 12)
 
     const { error: updErr } = await supabase
       .from('asistencia')
-      .update({ hora_salida: salida })
+      .update({ hora_salida: horaSalida })
       .eq('id', reg.id)
 
-    if (!updErr) cerrados.push({ nombre: reg.nombre, hora_ingreso: reg.hora_ingreso, hora_salida: salida })
+    if (!updErr) cerrados.push({ nombre: reg.nombre, hora_ingreso: reg.hora_ingreso, hora_salida: horaSalida })
   }
 
-  return NextResponse.json({ ok: true, cerrados: cerrados.length, detalle: cerrados, sinRegla })
+  return NextResponse.json({
+    ok: true,
+    cerrados: cerrados.length,
+    detalle: cerrados,
+    pendientes,
+  })
 }
