@@ -55,7 +55,7 @@ export default function JornadaPage() {
   const [guardandoMasivo, setGuardandoMasivo] = useState(false)
   const [resultadoMasivo, setResultadoMasivo] = useState('')
 
-  // Formulario individual
+  // Formulario individual (nueva actividad)
   const [form, setForm] = useState<Record<string, string>>({
     sku: '', producto: '', proceso: 'ENVASAR', turno: 'MAÑANA',
     personal_planeado: '', cantidad: '', unidad: 'UND', lote: '', notas: '',
@@ -66,6 +66,12 @@ export default function JornadaPage() {
   const [skuSearch, setSkuSearch] = useState('')
   const [baseInfo, setBaseInfo] = useState<BaseProceso | null>(null)
   const [loadingBase, setLoadingBase] = useState(false)
+
+  // Modal de edición rápida por fila
+  const [modalEdit, setModalEdit] = useState<Actividad | null>(null)
+  const [modalForm, setModalForm] = useState<Record<string, string>>({})
+  const [modalSaving, setModalSaving] = useState(false)
+  const [modalError, setModalError] = useState('')
 
   const excelRef = useRef<HTMLInputElement>(null)
 
@@ -226,6 +232,49 @@ export default function JornadaPage() {
     if (!confirm('¿Eliminar esta actividad?')) return
     await fetch(`/api/actividades/${id}`, { method: 'DELETE' })
     cargar()
+  }
+
+  function abrirModalEdit(a: Actividad) {
+    setModalEdit(a)
+    setModalForm({
+      sku: a.sku ?? '',
+      producto: a.producto,
+      proceso: a.proceso,
+      turno: a.turno,
+      personal_planeado: a.personal_planeado?.toString() ?? '',
+      cantidad: a.cantidad.toString(),
+      unidad: a.unidad ?? 'UND',
+      lote: a.lote ?? '',
+      notas: a.notas ?? '',
+    })
+    setModalError('')
+  }
+
+  async function guardarModalEdit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!modalEdit) return
+    setModalSaving(true)
+    setModalError('')
+    const body = {
+      sku: modalForm.sku || null,
+      producto: modalForm.producto,
+      proceso: modalForm.proceso,
+      turno: modalForm.turno,
+      personal_planeado: modalForm.personal_planeado ? parseInt(modalForm.personal_planeado) : null,
+      cantidad: parseInt(modalForm.cantidad),
+      unidad: modalForm.unidad || null,
+      lote: modalForm.lote || null,
+      notas: modalForm.notas || null,
+    }
+    const res = await fetch(`/api/actividades/${modalEdit.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const data = await res.json()
+    if (!res.ok) { setModalError(data.error || 'Error al guardar') }
+    else { setModalEdit(null); cargar() }
+    setModalSaving(false)
   }
 
   function updatePreview(i: number, field: string, value: string | number | null) {
@@ -590,13 +639,13 @@ export default function JornadaPage() {
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex gap-1">
-                        <button onClick={() => iniciarEdicion(a)} title="Editar"
-                          className="text-gray-500 hover:text-yellow-400 p-1 rounded hover:bg-gray-800 transition-colors">
-                          <Pencil size={13} />
+                        <button onClick={() => abrirModalEdit(a)} title="Editar actividad"
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold transition-colors bg-yellow-900/40 text-yellow-400 hover:bg-yellow-800/60 border border-yellow-800/50">
+                          <Pencil size={11} /> Editar
                         </button>
-                        <button onClick={() => eliminar(a.id)} title="Eliminar"
-                          className="text-gray-500 hover:text-red-400 p-1 rounded hover:bg-gray-800 transition-colors">
-                          <Trash2 size={13} />
+                        <button onClick={() => eliminar(a.id)} title="Eliminar actividad"
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-semibold transition-colors bg-red-900/40 text-red-400 hover:bg-red-800/60 border border-red-800/50">
+                          <Trash2 size={11} /> Eliminar
                         </button>
                       </div>
                     </td>
@@ -608,6 +657,127 @@ export default function JornadaPage() {
           </div>
         )}
       </div>
+
+      {/* ── Modal editar actividad ── */}
+      {modalEdit && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50" onClick={e => { if (e.target === e.currentTarget) setModalEdit(null) }}>
+          <form onSubmit={guardarModalEdit}
+            className="rounded-2xl p-6 w-full max-w-2xl space-y-4 shadow-2xl"
+            style={{ background: '#1a3412', border: '1px solid #3a6228' }}>
+
+            <div className="flex items-center justify-between">
+              <h2 className="text-white font-bold text-lg">Editar actividad</h2>
+              <button type="button" onClick={() => setModalEdit(null)} className="text-gray-400 hover:text-white p-1">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              {/* Descripción */}
+              <div className="col-span-2 sm:col-span-2">
+                <label className="text-gray-400 text-xs block mb-1">Descripción *</label>
+                <input required value={modalForm.producto}
+                  onChange={e => setModalForm(f => ({ ...f, producto: e.target.value }))}
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-green-500" />
+              </div>
+              {/* REF/SKU */}
+              <div>
+                <label className="text-gray-400 text-xs block mb-1">REF / SKU</label>
+                <input value={modalForm.sku}
+                  onChange={e => setModalForm(f => ({ ...f, sku: e.target.value }))}
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-green-500" />
+              </div>
+              {/* Proceso */}
+              <div>
+                <label className="text-gray-400 text-xs block mb-1">Proceso *</label>
+                <div className="relative">
+                  <select required value={modalForm.proceso}
+                    onChange={e => setModalForm(f => ({ ...f, proceso: e.target.value }))}
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-green-500 appearance-none">
+                    {PROCESOS.map(p => <option key={p}>{p}</option>)}
+                  </select>
+                  <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+              {/* Turno */}
+              <div>
+                <label className="text-gray-400 text-xs block mb-1">Turno</label>
+                <div className="relative">
+                  <select value={modalForm.turno}
+                    onChange={e => setModalForm(f => ({ ...f, turno: e.target.value }))}
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-green-500 appearance-none">
+                    {TURNOS.map(t => <option key={t}>{t}</option>)}
+                  </select>
+                  <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+              {/* TRIP */}
+              <div>
+                <label className="text-gray-400 text-xs block mb-1">TRIP (personal)</label>
+                <input type="number" min={0} value={modalForm.personal_planeado}
+                  onChange={e => setModalForm(f => ({ ...f, personal_planeado: e.target.value }))}
+                  placeholder="Opcional"
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-green-500" />
+              </div>
+              {/* META */}
+              <div>
+                <label className="text-gray-400 text-xs block mb-1">META *</label>
+                <input required type="number" min={1} value={modalForm.cantidad}
+                  onChange={e => setModalForm(f => ({ ...f, cantidad: e.target.value }))}
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-green-500" />
+              </div>
+              {/* Unidad */}
+              <div>
+                <label className="text-gray-400 text-xs block mb-1">UND de medida</label>
+                <div className="relative">
+                  <select value={modalForm.unidad}
+                    onChange={e => setModalForm(f => ({ ...f, unidad: e.target.value }))}
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-green-500 appearance-none">
+                    <option value="">—</option>
+                    {UNIDADES.map(u => <option key={u}>{u}</option>)}
+                  </select>
+                  <ChevronDown size={12} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                </div>
+              </div>
+              {/* Lote */}
+              <div>
+                <label className="text-gray-400 text-xs block mb-1">Lote</label>
+                <input value={modalForm.lote}
+                  onChange={e => setModalForm(f => ({ ...f, lote: e.target.value }))}
+                  placeholder="Opcional"
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-green-500 placeholder-gray-600" />
+              </div>
+              {/* Notas */}
+              <div className="col-span-2 sm:col-span-3">
+                <label className="text-gray-400 text-xs block mb-1">Notas</label>
+                <input value={modalForm.notas}
+                  onChange={e => setModalForm(f => ({ ...f, notas: e.target.value }))}
+                  placeholder="Observaciones opcionales"
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-green-500" />
+              </div>
+            </div>
+
+            {modalError && <p className="text-red-400 text-sm">{modalError}</p>}
+
+            <div className="flex gap-3 pt-1">
+              <button type="submit" disabled={modalSaving}
+                className="text-white font-semibold px-6 py-2.5 rounded-xl disabled:opacity-50 transition-all hover:scale-[1.02]"
+                style={{ background: 'linear-gradient(135deg,#2e6e20,#3d8830)', border: '1px solid #5aaa40' }}>
+                {modalSaving ? 'Guardando...' : <span className="flex items-center gap-2"><Check size={15} /> Guardar cambios</span>}
+              </button>
+              <button type="button" onClick={() => setModalEdit(null)}
+                className="text-gray-400 hover:text-white px-4 py-2 rounded-xl hover:bg-gray-800 transition-colors text-sm">
+                Cancelar
+              </button>
+              <div className="flex-1" />
+              <button type="button" onClick={() => { setModalEdit(null); eliminar(modalEdit.id) }}
+                className="flex items-center gap-1.5 text-red-400 hover:text-red-300 px-3 py-2 rounded-xl hover:bg-red-950/40 text-sm transition-colors">
+                <Trash2 size={14} /> Eliminar actividad
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   )
 }
