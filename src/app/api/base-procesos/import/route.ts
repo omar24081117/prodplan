@@ -227,19 +227,25 @@ export async function POST(request: NextRequest) {
 
     // Preparar registros para upsert en base_procesos
     type BaseProcRow = { catalogo_id: string; proceso: string; estandar: number; unidad: string }
-    const registros: BaseProcRow[] = []
     const skipped: string[] = []
+
+    // Mapa para deduplicar: si un mismo SKU aparece dos veces con el mismo proceso,
+    // conservar el último valor no nulo (el Excel puede tener filas duplicadas)
+    const dedupMap = new Map<string, BaseProcRow>()
 
     for (const row of extracted) {
       const cat = skuMap.get(row.sku)
       if (!cat) { skipped.push(row.sku); continue }
-      registros.push({
+      const key = `${cat.id}||${row.proceso}`
+      dedupMap.set(key, {
         catalogo_id: cat.id,
         proceso: row.proceso,
         estandar: row.estandar,
         unidad: 'UND',
       })
     }
+
+    const registros = Array.from(dedupMap.values())
 
     if (registros.length === 0) {
       return NextResponse.json({ error: 'Ningún producto encontrado en el catálogo' }, { status: 400 })
