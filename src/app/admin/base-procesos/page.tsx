@@ -4,8 +4,10 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Plus, Trash2, Pencil, Check, X, ChevronDown, Search, BookOpen, Upload, FileSpreadsheet } from 'lucide-react'
 
 const PROCESOS = [
-  'FABRICAR', 'TROQUELAR', 'SOPLAR ENV', 'ETIQUETAR', 'ENVASAR',
-  'EMPACAR', 'LAVAR', 'ACONDICIONAR', 'PESAJE', 'MEZCLADO', 'CONTROL CALIDAD', 'OTRO',
+  'FABRICAR', 'REPROCESAR', 'PRUEBAS', 'EMPACAR', 'ENVOLVER',
+  'ENVASAR', 'CODIFICAR', 'ETIQUETAR', 'ACONDICIONAR', 'TROQUELAR',
+  'TERMOENCOGIDO', 'ENSAMBLAR', 'TRASLADAR', 'ASEO', 'LAVAR',
+  'PRESTAMO', 'SOPLAR ENV',
 ]
 const UNIDADES = ['UND', 'CAJA', 'KG', 'TINA', 'PLEGA', 'LT', 'FRASCO', 'BOLSA', 'OTRO']
 
