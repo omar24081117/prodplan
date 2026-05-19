@@ -1,14 +1,26 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { Clock, RefreshCw, AlertCircle } from 'lucide-react'
 
 type Registro = { cedula: string; nombre: string; hora_ingreso: string; hora_salida: string | null }
 
+/** Determina qué hora de salida por defecto le corresponde según la hora de ingreso */
+function salidaDefault(horaIngreso: string): string | null {
+  const [h, m] = horaIngreso.split(':').map(Number)
+  const min = h * 60 + m
+  if (min >= 5 * 60 + 30 && min <= 7 * 60 + 30) return '17:00'
+  if (min >= 12 * 60 + 30 && min <= 14 * 60) return '23:00'
+  return null
+}
+
 export default function AsistenciaAdminPage() {
-  const hoy = new Date().toLocaleDateString('en-CA')
+  const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
   const [fecha, setFecha] = useState(hoy)
   const [registros, setRegistros] = useState<Registro[]>([])
   const [loading, setLoading] = useState(true)
+  const [cerrandoAuto, setCerrandoAuto] = useState(false)
+  const [resultadoCierre, setResultadoCierre] = useState<string | null>(null)
 
   const cargar = useCallback(async () => {
     setLoading(true)
@@ -21,6 +33,30 @@ export default function AsistenciaAdminPage() {
   useEffect(() => { cargar() }, [cargar])
 
   const enPlanta = registros.filter(r => !r.hora_salida)
+  const sinSalida = enPlanta.filter(r => salidaDefault(r.hora_ingreso) !== null)
+
+  async function cerrarAutomatico() {
+    if (sinSalida.length === 0) return
+    setCerrandoAuto(true)
+    setResultadoCierre(null)
+    try {
+      const res = await fetch('/api/asistencia/cierre-automatico', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fecha }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        setResultadoCierre(`✓ ${data.cerrados} registros cerrados automáticamente`)
+        cargar()
+      } else {
+        setResultadoCierre('❌ ' + (data.error || 'Error al cerrar'))
+      }
+    } catch {
+      setResultadoCierre('❌ Error de conexión')
+    }
+    setCerrandoAuto(false)
+  }
 
   return (
     <div className="max-w-3xl mx-auto">
@@ -32,20 +68,57 @@ export default function AsistenciaAdminPage() {
           onChange={e => setFecha(e.target.value)}
           className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none"
         />
-        <button onClick={cargar} className="text-gray-400 hover:text-white text-sm px-3 py-2 bg-gray-800 rounded-lg">↻</button>
+        <button onClick={cargar} className="text-gray-400 hover:text-white text-sm px-3 py-2 bg-gray-800 rounded-lg">
+          <RefreshCw size={14} />
+        </button>
       </div>
 
       {!loading && (
-        <div className="flex gap-4 mb-4">
-          <div className="bg-emerald-900/30 border border-emerald-800 rounded-xl px-4 py-3">
-            <p className="text-gray-400 text-xs">En planta</p>
-            <p className="text-2xl font-bold text-emerald-400">{enPlanta.length}</p>
+        <>
+          <div className="flex gap-4 mb-4 flex-wrap">
+            <div className="bg-emerald-900/30 border border-emerald-800 rounded-xl px-4 py-3">
+              <p className="text-gray-400 text-xs">En planta</p>
+              <p className="text-2xl font-bold text-emerald-400">{enPlanta.length}</p>
+            </div>
+            <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
+              <p className="text-gray-400 text-xs">Total registros</p>
+              <p className="text-2xl font-bold text-white">{registros.length}</p>
+            </div>
+            <div className="bg-blue-900/30 border border-blue-800 rounded-xl px-4 py-3">
+              <p className="text-gray-400 text-xs">Con salida</p>
+              <p className="text-2xl font-bold text-blue-400">{registros.filter(r => r.hora_salida).length}</p>
+            </div>
           </div>
-          <div className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
-            <p className="text-gray-400 text-xs">Total registros</p>
-            <p className="text-2xl font-bold text-white">{registros.length}</p>
-          </div>
-        </div>
+
+          {/* Aviso + botón cierre automático */}
+          {sinSalida.length > 0 && (
+            <div className="mb-4 rounded-xl px-4 py-3 flex items-start gap-3 bg-yellow-900/20 border border-yellow-800/50">
+              <AlertCircle size={16} className="text-yellow-400 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <p className="text-yellow-300 text-sm font-semibold">
+                  {sinSalida.length} persona{sinSalida.length > 1 ? 's' : ''} sin salida registrada con hora de cierre automático pendiente
+                </p>
+                <p className="text-yellow-500 text-xs mt-0.5">
+                  Ingreso 05:30–07:30 → cierre a las 17:00 · Ingreso 12:30–14:00 → cierre a las 23:00
+                </p>
+              </div>
+              <button
+                onClick={cerrarAutomatico}
+                disabled={cerrandoAuto}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-yellow-800/50 text-yellow-300 hover:bg-yellow-700/50 disabled:opacity-50 transition-colors shrink-0"
+              >
+                <Clock size={13} />
+                {cerrandoAuto ? 'Cerrando...' : 'Aplicar cierre'}
+              </button>
+            </div>
+          )}
+
+          {resultadoCierre && (
+            <p className={`text-sm mb-4 px-3 py-2 rounded-lg ${resultadoCierre.startsWith('✓') ? 'text-green-400 bg-green-950/40' : 'text-red-400 bg-red-950/40'}`}>
+              {resultadoCierre}
+            </p>
+          )}
+        </>
       )}
 
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
@@ -61,22 +134,37 @@ export default function AsistenciaAdminPage() {
                 <th className="text-left text-gray-400 px-4 py-2.5 font-medium">Cédula</th>
                 <th className="text-center text-gray-400 px-4 py-2.5 font-medium">Entrada</th>
                 <th className="text-center text-gray-400 px-4 py-2.5 font-medium">Salida</th>
+                <th className="text-center text-gray-400 px-4 py-2.5 font-medium">Cierre auto</th>
               </tr>
             </thead>
             <tbody>
-              {registros.map(r => (
-                <tr key={r.cedula} className="border-b border-gray-800/50 hover:bg-gray-800/30">
-                  <td className="px-4 py-2.5 text-white">{r.nombre}</td>
-                  <td className="px-4 py-2.5 text-gray-400 font-mono">{r.cedula}</td>
-                  <td className="px-4 py-2.5 text-center text-emerald-400 font-mono">{r.hora_ingreso}</td>
-                  <td className="px-4 py-2.5 text-center font-mono">
-                    {r.hora_salida
-                      ? <span className="text-orange-400">{r.hora_salida}</span>
-                      : <span className="text-gray-600">—</span>
-                    }
-                  </td>
-                </tr>
-              ))}
+              {registros.map(r => {
+                const defaultSalida = salidaDefault(r.hora_ingreso)
+                return (
+                  <tr key={r.cedula} className="border-b border-gray-800/50 hover:bg-gray-800/30">
+                    <td className="px-4 py-2.5 text-white">{r.nombre}</td>
+                    <td className="px-4 py-2.5 text-gray-400 font-mono">{r.cedula}</td>
+                    <td className="px-4 py-2.5 text-center text-emerald-400 font-mono">{r.hora_ingreso}</td>
+                    <td className="px-4 py-2.5 text-center font-mono">
+                      {r.hora_salida
+                        ? <span className="text-orange-400">{r.hora_salida}</span>
+                        : <span className="text-gray-600">—</span>
+                      }
+                    </td>
+                    <td className="px-4 py-2.5 text-center">
+                      {!r.hora_salida && defaultSalida ? (
+                        <span className="text-xs text-yellow-500 font-mono bg-yellow-900/20 px-2 py-0.5 rounded">
+                          → {defaultSalida}
+                        </span>
+                      ) : r.hora_salida ? (
+                        <span className="text-gray-700 text-xs">—</span>
+                      ) : (
+                        <span className="text-gray-700 text-xs">sin regla</span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         )}
