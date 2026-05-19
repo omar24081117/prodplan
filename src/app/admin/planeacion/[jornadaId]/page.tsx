@@ -3,7 +3,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { FileSpreadsheet, Plus, Trash2, Pencil, Check, X, Upload, Download, ChevronDown } from 'lucide-react'
+import { FileSpreadsheet, Plus, Trash2, Pencil, Check, X, Upload, Download, ChevronDown, Clock } from 'lucide-react'
+
+function formatHoras(horas: number): string {
+  if (!isFinite(horas) || horas <= 0) return '—'
+  const h = Math.floor(horas)
+  const m = Math.round((horas - h) * 60)
+  if (h === 0) return `${m}min`
+  if (m === 0) return `${h}h`
+  return `${h}h ${m}min`
+}
 
 const PROCESOS = [
   'FABRICAR', 'TROQUELAR', 'SOPLAR ENV', 'ETIQUETAR', 'ENVASAR',
@@ -18,8 +27,9 @@ type Jornada = {
 type Actividad = {
   id: string; sku: string | null; producto: string; proceso: string; turno: string
   personal_planeado: number | null; cantidad: number; unidad: string | null
-  lote: string | null; notas: string | null
+  lote: string | null; notas: string | null; estandar: number | null
 }
+type BaseProceso = { estandar: number; proceso: string; unidad: string | null }
 type ActImport = {
   sku: string | null; producto: string; proceso: string; turno: string
   personal_planeado: number | null; cantidad: number; unidad: string | null
@@ -52,6 +62,8 @@ export default function JornadaPage() {
   const [saving, setSaving] = useState(false)
   const [formError, setFormError] = useState('')
   const [skuSearch, setSkuSearch] = useState('')
+  const [baseInfo, setBaseInfo] = useState<BaseProceso | null>(null)
+  const [loadingBase, setLoadingBase] = useState(false)
 
   const excelRef = useRef<HTMLInputElement>(null)
 
@@ -70,6 +82,19 @@ export default function JornadaPage() {
   }, [jornadaId])
 
   useEffect(() => { cargar() }, [cargar])
+
+  // Auto-lookup estándar cuando cambia SKU o proceso
+  useEffect(() => {
+    const sku = form.sku?.trim()
+    const proceso = form.proceso
+    if (!sku || !proceso) { setBaseInfo(null); return }
+    setLoadingBase(true)
+    fetch(`/api/base-procesos?sku=${encodeURIComponent(sku)}&proceso=${encodeURIComponent(proceso)}`)
+      .then(r => r.json())
+      .then(data => setBaseInfo(data && data.estandar ? data : null))
+      .catch(() => setBaseInfo(null))
+      .finally(() => setLoadingBase(false))
+  }, [form.sku, form.proceso])
 
   const totalAsignado = actividades.reduce((s, a) => s + (a.personal_planeado || 0), 0)
   const libres = (jornada?.personal_disponible || 0) - totalAsignado
@@ -184,6 +209,7 @@ export default function JornadaPage() {
       unidad: form.unidad || null,
       lote: form.lote || null,
       notas: form.notas || null,
+      estandar: baseInfo?.estandar ?? null,
     }
     const res = editId
       ? await fetch(`/api/actividades/${editId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
@@ -460,6 +486,34 @@ export default function JornadaPage() {
             </div>
           </div>
 
+          {/* Banner tiempo estimado */}
+          {(() => {
+            const cant = parseInt(form.cantidad) || 0
+            const trip = parseInt(form.personal_planeado) || 0
+            if (!baseInfo || cant <= 0) return null
+            const efectivTrip = trip > 0 ? trip : 1
+            const horas = cant / (baseInfo.estandar * efectivTrip)
+            return (
+              <div className="rounded-xl px-4 py-3 flex items-center gap-3 flex-wrap"
+                style={{ background: '#0e1a0a', border: '1px solid #3a6228' }}>
+                <Clock size={15} className="text-green-400 shrink-0" />
+                <div className="text-sm">
+                  <span className="text-gray-400">Estándar: </span>
+                  <span className="text-white font-semibold">{baseInfo.estandar.toLocaleString('es-CO')} und/h·p</span>
+                  <span className="text-gray-500 mx-2">·</span>
+                  <span className="text-gray-400">TRIP: </span>
+                  <span className={`font-semibold ${trip > 0 ? 'text-white' : 'text-yellow-400'}`}>
+                    {trip > 0 ? trip : '1 (sin asignar)'}
+                  </span>
+                  <span className="text-gray-500 mx-2">·</span>
+                  <span className="text-gray-400">Tiempo estimado: </span>
+                  <span className="text-emerald-400 font-bold text-base">{formatHoras(horas)}</span>
+                </div>
+                {loadingBase && <span className="text-gray-500 text-xs">buscando...</span>}
+              </div>
+            )
+          })()}
+
           {formError && <p className="text-red-400 text-sm">{formError}</p>}
 
           <div className="flex gap-3">
@@ -492,13 +546,17 @@ export default function JornadaPage() {
             <table className="w-full text-sm min-w-[700px]">
               <thead>
                 <tr style={{ background: '#1e3a14' }}>
-                  {['PROCESO', 'TRIP', 'TURNO', 'REF', 'DESCRIPCIÓN', 'LOTE', 'UND', 'META', ''].map(h => (
+                  {['PROCESO', 'TRIP', 'TURNO', 'REF', 'DESCRIPCIÓN', 'LOTE', 'UND', 'META', 'T.ESTIMADO', ''].map(h => (
                     <th key={h} className="px-3 py-2.5 text-left text-gray-400 font-semibold text-xs whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {actividades.map((a, i) => (
+                {actividades.map((a, i) => {
+                  const tiempoH = a.estandar && a.estandar > 0
+                    ? a.cantidad / (a.estandar * (a.personal_planeado || 1))
+                    : null
+                  return (
                   <tr key={a.id} style={{ background: i % 2 === 0 ? '#162e10' : '#1a3412', borderBottom: '1px solid #2a4e1c' }}>
                     <td className="px-3 py-2 text-white font-medium whitespace-nowrap">{a.proceso}</td>
                     <td className="px-3 py-2 text-center text-gray-300">{a.personal_planeado ?? '—'}</td>
@@ -518,6 +576,16 @@ export default function JornadaPage() {
                     </td>
                     <td className="px-3 py-2 text-gray-300 text-xs">{a.unidad ?? '—'}</td>
                     <td className="px-3 py-2 text-white font-bold text-right">{a.cantidad.toLocaleString()}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      {tiempoH !== null ? (
+                        <span className="flex items-center gap-1 text-emerald-400 font-semibold text-xs">
+                          <Clock size={10} className="shrink-0" />
+                          {formatHoras(tiempoH)}
+                        </span>
+                      ) : (
+                        <span className="text-gray-600 text-xs">sin est.</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2">
                       <div className="flex gap-1">
                         <button onClick={() => iniciarEdicion(a)} title="Editar"
@@ -531,7 +599,8 @@ export default function JornadaPage() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>

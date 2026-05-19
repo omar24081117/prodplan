@@ -1,7 +1,16 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { ArrowUpDown, ArrowUp, ArrowDown, Users, Package, ChevronDown, ChevronUp } from 'lucide-react'
+import { ArrowUpDown, ArrowUp, ArrowDown, Users, Package, ChevronDown, ChevronUp, Clock } from 'lucide-react'
+
+function formatHoras(horas: number): string {
+  if (!isFinite(horas) || horas <= 0) return '—'
+  const h = Math.floor(horas)
+  const m = Math.round((horas - h) * 60)
+  if (h === 0) return `${m}min`
+  if (m === 0) return `${h}h`
+  return `${h}h ${m}min`
+}
 
 const HORAS_POR_TURNO: Record<string, string[]> = {
   'MAÑANA': [
@@ -24,6 +33,7 @@ function horasTurno(turno: string): string[] {
 type Actividad = {
   id: string; sku: string | null; producto: string; proceso: string
   turno: string; cantidad: number; lote: string | null; personal_planeado: number | null
+  estandar: number | null
 }
 type Reporte = { hora: string; cantidad: number; tiempo_improductivo: number | null; observacion: string | null }
 type OperarioAsignado = { cedula: string; nombre: string }
@@ -211,6 +221,7 @@ export default function AdminEjecucionPage() {
                   </th>
                   <th className="px-3 py-3 text-center font-semibold text-xs uppercase tracking-wide" style={{ color: '#7aaa66' }}>Lote</th>
                   <th className="px-3 py-3 text-center font-semibold text-xs uppercase tracking-wide" style={{ color: '#7aaa66' }}>Personal</th>
+                  <th className="px-3 py-3 text-center font-semibold text-xs uppercase tracking-wide whitespace-nowrap" style={{ color: '#7aaa66' }}>T.Estimado</th>
                   <th className="px-3 py-3 text-center font-semibold text-xs uppercase tracking-wide" style={{ color: '#7aaa66' }}>Horas</th>
                 </tr>
               </thead>
@@ -310,6 +321,23 @@ export default function AdminEjecucionPage() {
                           </button>
                         </td>
 
+                        {/* T.Estimado */}
+                        <td className="px-3 py-2.5 text-center">
+                          {(() => {
+                            if (!a.estandar || a.estandar <= 0) return <span className="text-gray-600 text-xs">—</span>
+                            const trip = asignados.length > 0 ? asignados.length : (a.personal_planeado || 1)
+                            const horas = a.cantidad / (a.estandar * trip)
+                            return (
+                              <div className="flex flex-col items-center gap-0.5">
+                                <span className="text-emerald-400 font-bold text-xs">{formatHoras(horas)}</span>
+                                {asignados.length === 0 && a.personal_planeado == null && (
+                                  <span className="text-yellow-600 text-[9px]">sin TRIP</span>
+                                )}
+                              </div>
+                            )
+                          })()}
+                        </td>
+
                         {/* Horas */}
                         <td className="px-3 py-2.5 text-center">
                           <button onClick={() => setExpandida(abierta ? null : a.id)}
@@ -323,7 +351,7 @@ export default function AdminEjecucionPage() {
                       {/* Fila expandida — grid de horas */}
                       {abierta && (
                         <tr key={`${a.id}-horas`} style={{ background: '#0d1a0a', borderBottom: '2px solid #2a4e1c' }}>
-                          <td colSpan={8} className="px-4 py-3">
+                          <td colSpan={9} className="px-4 py-3">
                             <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5">
                               {horasTurno(a.turno).map(hora => {
                                 const rep = reps.find(r => r.hora === hora)
