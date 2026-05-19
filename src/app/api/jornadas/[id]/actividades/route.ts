@@ -12,7 +12,50 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     .order('created_at', { ascending: true })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data)
+
+  // Enriquecer con estandar desde base_procesos para actividades sin estandar guardado
+  const actividades = data ?? []
+  const sinEstandar = actividades.filter(
+    (a: Record<string, unknown>) => (a.estandar == null || a.estandar === 0) && a.sku && a.proceso
+  )
+
+  if (sinEstandar.length > 0) {
+    // Obtener SKUs únicos que necesitan lookup
+    const skus = [...new Set(sinEstandar.map((a: Record<string, unknown>) => a.sku as string))]
+    const { data: catalogoItems } = await supabase
+      .from('catalogo')
+      .select('id, sku')
+      .in('sku', skus)
+
+    if (catalogoItems && catalogoItems.length > 0) {
+      const skuToId = new Map(catalogoItems.map((c: { id: string; sku: string }) => [c.sku, c.id]))
+      const catalogoIds = catalogoItems.map((c: { id: string }) => c.id)
+
+      const { data: baseProcesos } = await supabase
+        .from('base_procesos')
+        .select('catalogo_id, proceso, estandar')
+        .in('catalogo_id', catalogoIds)
+
+      const bpMap = new Map(
+        (baseProcesos ?? []).map((bp: { catalogo_id: string; proceso: string; estandar: number }) =>
+          [`${bp.catalogo_id}||${bp.proceso}`, bp.estandar]
+        )
+      )
+
+      // Asignar estandar a las actividades que no lo tienen
+      for (const act of actividades as Record<string, unknown>[]) {
+        if ((act.estandar == null || act.estandar === 0) && act.sku && act.proceso) {
+          const catalogoId = skuToId.get(act.sku as string)
+          if (catalogoId) {
+            const estandar = bpMap.get(`${catalogoId}||${act.proceso}`)
+            if (estandar) act.estandar = estandar
+          }
+        }
+      }
+    }
+  }
+
+  return NextResponse.json(actividades)
 }
 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {

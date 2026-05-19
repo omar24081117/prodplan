@@ -476,6 +476,39 @@ export default function EjecucionPage() {
                 className="w-full bg-gray-800 border border-gray-700 text-white text-center text-2xl font-bold rounded-xl px-4 py-3 focus:outline-none focus:border-green-500" />
             </div>
 
+            {/* Banner tiempo estimado */}
+            {(() => {
+              const act = actividades.find(a => a.id === modal.actividadId)
+              if (!act?.estandar || act.estandar <= 0) return null
+              const asignados = asignadosPor[act.id] || []
+              const trip = asignados.length > 0 ? asignados.length : (act.personal_planeado || 1)
+              const cant = parseInt(cantidad) || 0
+              const horas = cant > 0 ? cant / (act.estandar * trip) : null
+              return (
+                <div className="rounded-xl px-4 py-3 flex flex-col gap-1" style={{ background: '#0d2a08', border: '1px solid #2a5e1a' }}>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-400">Estándar</span>
+                    <span className="text-white font-mono font-bold">{act.estandar} und/h·p</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-gray-400">TRIP (personas)</span>
+                    <span className={`font-bold font-mono ${trip === 1 && asignados.length === 0 ? 'text-yellow-400' : 'text-white'}`}>
+                      {trip}{trip === 1 && asignados.length === 0 ? ' (estimado)' : ''}
+                    </span>
+                  </div>
+                  {horas !== null && (
+                    <div className="flex items-center justify-between text-xs border-t border-green-900/50 mt-1 pt-1">
+                      <span className="text-gray-300 font-semibold flex items-center gap-1"><Clock size={11} />T. Estimado</span>
+                      <span className="text-emerald-400 font-bold text-sm">{formatHoras(horas)}</span>
+                    </div>
+                  )}
+                  {cant === 0 && (
+                    <p className="text-gray-500 text-[10px] text-center">Ingresa la cantidad para ver el tiempo estimado</p>
+                  )}
+                </div>
+              )
+            })()}
+
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-orange-400 text-xs block mb-1">⚠ Tiempo improductivo (min)</label>
