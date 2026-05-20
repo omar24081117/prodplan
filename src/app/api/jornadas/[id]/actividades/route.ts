@@ -71,9 +71,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     .single()
 
   if (error) {
-    // Si el error es por columna unidad desconocida, reintentamos sin ella
-    if (error.message.includes('unidad') || error.code === 'PGRST204') {
-      const { unidad, ...bodyRest } = body
+    // Si el error es por columnas desconocidas (unidad, estandar, etc.), reintentamos sin ellas
+    if (error.message.includes('column') || error.message.includes('unidad') || error.message.includes('estandar')) {
+      const { unidad, estandar, ...bodyRest } = body
       const notasConUnidad = unidad
         ? (bodyRest.notas ? `[${unidad}] ${bodyRest.notas}` : `[${unidad}]`)
         : bodyRest.notas
@@ -105,10 +105,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const { data, error } = await supabase.from('actividades').insert(rows).select()
 
   if (error) {
-    // Fallback sin campo unidad
-    if (error.message.includes('unidad') || error.code === 'PGRST204') {
+    // Fallback sin columnas desconocidas (unidad, estandar)
+    if (error.message.includes('column') || error.message.includes('unidad') || error.message.includes('estandar')) {
       const rowsFallback = actividades.map((a: Record<string, unknown>) => {
-        const { unidad, ...rest } = a as { unidad?: string; [k: string]: unknown }
+        const { unidad, estandar, ...rest } = a as { unidad?: string; estandar?: number; [k: string]: unknown }
         const notasConUnidad = unidad
           ? (rest.notas ? `[${unidad}] ${rest.notas}` : `[${unidad}]`)
           : rest.notas

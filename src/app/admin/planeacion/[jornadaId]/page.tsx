@@ -207,6 +207,11 @@ export default function JornadaPage() {
     e.preventDefault()
     setSaving(true)
     setFormError('')
+    // unidad se guarda como prefijo [UND] en notas (la columna no existe en BD)
+    // estandar tampoco existe como columna; el GET lo enriquece desde base_procesos
+    const unidad = form.unidad || ''
+    const notasBase = form.notas || ''
+    const notasConUnidad = unidad ? (notasBase ? `[${unidad}] ${notasBase}` : `[${unidad}]`) : (notasBase || null)
     const body = {
       sku: form.sku || null,
       producto: form.producto,
@@ -214,10 +219,8 @@ export default function JornadaPage() {
       turno: form.turno,
       personal_planeado: form.personal_planeado ? parseInt(form.personal_planeado) : null,
       cantidad: parseInt(form.cantidad),
-      unidad: form.unidad || null,
       lote: form.lote || null,
-      notas: form.notas || null,
-      estandar: baseInfo?.estandar ?? null,
+      notas: notasConUnidad,
     }
     const res = editId
       ? await fetch(`/api/actividades/${editId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
