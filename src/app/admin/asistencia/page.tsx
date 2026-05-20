@@ -30,42 +30,16 @@ export default function AsistenciaAdminPage() {
   const [fecha, setFecha] = useState(hoy)
   const [registros, setRegistros] = useState<Registro[]>([])
   const [loading, setLoading] = useState(true)
-  const [cierreMsg, setCierreMsg] = useState<string | null>(null)
 
-  const aplicarCierreAutomatico = useCallback(async (fechaTarget: string) => {
-    try {
-      const res = await fetch('/api/asistencia/cierre-automatico', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fecha: fechaTarget }),
-      })
-      const data = await res.json()
-      if (data.ok && data.cerrados > 0) {
-        setCierreMsg(`Cierre automático aplicado: ${data.cerrados} registro${data.cerrados > 1 ? 's' : ''} cerrado${data.cerrados > 1 ? 's' : ''} (ingreso + 12h)`)
-        return true // hubo cierres, recargar
-      }
-    } catch { /* silencioso */ }
-    return false
-  }, [])
-
-  const cargar = useCallback(async (fechaTarget: string) => {
+  const cargar = useCallback(async () => {
     setLoading(true)
-    setCierreMsg(null)
-
-    // 1. Aplicar cierre automático si corresponde
-    const huboCierres = await aplicarCierreAutomatico(fechaTarget)
-
-    // 2. Cargar registros (frescos si hubo cierres)
-    const res = await fetch(`/api/asistencia/lista?fecha=${fechaTarget}`)
+    const res = await fetch(`/api/asistencia/lista?fecha=${fecha}`)
     const data = await res.json()
     setRegistros(data)
     setLoading(false)
+  }, [fecha])
 
-    // Suprimir el mensaje si no hubo cierres
-    if (!huboCierres) setCierreMsg(null)
-  }, [aplicarCierreAutomatico])
-
-  useEffect(() => { cargar(fecha) }, [fecha, cargar])
+  useEffect(() => { cargar() }, [cargar])
 
   const enPlanta = registros.filter(r => !r.hora_salida)
 
@@ -79,7 +53,7 @@ export default function AsistenciaAdminPage() {
           onChange={e => setFecha(e.target.value)}
           className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none"
         />
-        <button onClick={() => cargar(fecha)} className="text-gray-400 hover:text-white text-sm px-3 py-2 bg-gray-800 rounded-lg">
+        <button onClick={cargar} className="text-gray-400 hover:text-white text-sm px-3 py-2 bg-gray-800 rounded-lg">
           <RefreshCw size={14} />
         </button>
       </div>
@@ -98,12 +72,6 @@ export default function AsistenciaAdminPage() {
             <p className="text-gray-400 text-xs">Con salida</p>
             <p className="text-2xl font-bold text-blue-400">{registros.filter(r => r.hora_salida).length}</p>
           </div>
-        </div>
-      )}
-
-      {cierreMsg && (
-        <div className="mb-4 px-4 py-3 rounded-xl text-sm text-green-300 bg-green-950/40 border border-green-800/50">
-          ✓ {cierreMsg}
         </div>
       )}
 
@@ -142,15 +110,11 @@ export default function AsistenciaAdminPage() {
                       {r.hora_salida ? (
                         <span className="text-gray-700 text-xs">—</span>
                       ) : (
-                        <span className={`text-xs font-mono px-2 py-0.5 rounded ${
-                          horas >= 12
-                            ? 'bg-orange-900/40 text-orange-400'
-                            : 'bg-gray-800 text-gray-500'
-                        }`}>
+                        <span className="text-xs font-mono px-2 py-0.5 rounded bg-gray-800 text-gray-400">
                           {cierreAuto}
                           {horas > 0 && horas < 12 && (
                             <span className="ml-1 text-gray-600">
-                              ({Math.floor(12 - horas)}h restantes)
+                              ({Math.floor(12 - horas)}h rest.)
                             </span>
                           )}
                         </span>
