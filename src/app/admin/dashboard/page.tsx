@@ -19,7 +19,7 @@ type DashboardData = {
 }
 
 function GaugeMeter({ pct, proceso, meta, ejecutado }: { pct: number; proceso: string; meta: number; ejecutado: number }) {
-  const r = 28, cx = 40, cy = 38
+  const r = 22, cx = 32, cy = 28
   const arcLen = Math.PI * r
   const dashLen = arcLen * Math.min(pct, 100) / 100
   const color  = pct >= 90 ? '#10b981' : pct >= 70 ? '#f59e0b' : '#ef4444'
@@ -28,21 +28,27 @@ function GaugeMeter({ pct, proceso, meta, ejecutado }: { pct: number; proceso: s
   const a = Math.PI * (1 - Math.min(pct, 100) / 100)
   const nx = cx + r * Math.cos(a), ny = cy - r * Math.sin(a)
   return (
-    <div className="flex flex-col items-center rounded-xl px-1 py-1.5 transition-colors hover:brightness-110"
+    <div className="flex flex-col items-center rounded-lg px-1 pt-1 pb-1 hover:brightness-110 transition-all"
       style={{ background: '#0d1a08', border: `1px solid ${border}` }}>
-      <svg viewBox="0 0 80 46" className="w-full">
+      <svg viewBox="0 0 64 44" className="w-full">
+        {/* track */}
         <path d={`M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}`}
-          fill="none" stroke={track} strokeWidth="8" strokeLinecap="round" />
+          fill="none" stroke={track} strokeWidth="6" strokeLinecap="round" />
+        {/* progress */}
         {pct > 0 && (
           <path d={`M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}`}
-            fill="none" stroke={color} strokeWidth="8" strokeLinecap="round"
+            fill="none" stroke={color} strokeWidth="6" strokeLinecap="round"
             strokeDasharray={`${dashLen} ${arcLen}`} />
         )}
-        <circle cx={nx} cy={ny} r="3.5" fill={color} opacity="0.95" />
-        <text x={cx} y={cy - 1} textAnchor="middle" fill="white" fontSize="13" fontWeight="900" fontFamily="system-ui,sans-serif">{pct}%</text>
-        <text x={cx} y={cy + 10} textAnchor="middle" fill="#6b9a60" fontSize="4.5">{ejecutado.toLocaleString()}/{meta.toLocaleString()}</text>
+        {/* needle */}
+        <circle cx={nx} cy={ny} r="3" fill={color} />
+        {/* % */}
+        <text x={cx} y={cy + 1} textAnchor="middle" fill="white" fontSize="11" fontWeight="900" fontFamily="system-ui,sans-serif">{pct}%</text>
+        {/* unidades */}
+        <text x={cx} y={cy + 11} textAnchor="middle" fill="#6b9a60" fontSize="4">{ejecutado.toLocaleString()} / {meta.toLocaleString()}</text>
+        {/* proceso */}
+        <text x={cx} y={cy + 20} textAnchor="middle" fill="#9ca3af" fontSize="4.5" fontWeight="700">{proceso}</text>
       </svg>
-      <p className="text-white text-[9px] font-bold text-center leading-tight px-0.5">{proceso}</p>
     </div>
   )
 }
@@ -229,7 +235,7 @@ export default function DashboardPage() {
                 <h2 className="text-white font-semibold">Resumen por proceso</h2>
                 <span className="text-gray-500 text-xs">{data.por_proceso.length} procesos</span>
               </div>
-              <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 gap-1.5 p-2">
+              <div className="grid grid-cols-4 sm:grid-cols-5 lg:grid-cols-4 xl:grid-cols-5 gap-1.5 p-2">
                 {data.por_proceso.map(row => (
                   <GaugeMeter key={row.proceso} pct={row.cumplimiento} proceso={row.proceso} meta={row.meta} ejecutado={row.ejecutado} />
                 ))}
