@@ -13,7 +13,24 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
     .select()
     .single()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 400 })
+  if (error) {
+    // If 'unidad' column doesn't exist, retry storing it as [UND] prefix in notas
+    if (error.message.includes('unidad') || error.code === 'PGRST204') {
+      const { unidad, ...bodyRest } = body
+      const notasConUnidad = unidad
+        ? (bodyRest.notas ? `[${unidad}] ${bodyRest.notas}` : `[${unidad}]`)
+        : bodyRest.notas
+      const { data: data2, error: error2 } = await supabase
+        .from('actividades')
+        .update({ ...bodyRest, notas: notasConUnidad })
+        .eq('id', id)
+        .select()
+        .single()
+      if (error2) return NextResponse.json({ error: error2.message }, { status: 400 })
+      return NextResponse.json(data2)
+    }
+    return NextResponse.json({ error: error.message }, { status: 400 })
+  }
   return NextResponse.json(data)
 }
 

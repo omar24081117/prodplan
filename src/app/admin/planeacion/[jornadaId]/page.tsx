@@ -236,6 +236,13 @@ export default function JornadaPage() {
 
   function abrirModalEdit(a: Actividad) {
     setModalEdit(a)
+    // Si unidad no existe como columna, puede estar guardada como prefijo [UND] en notas
+    let notas = a.notas ?? ''
+    let unidad = a.unidad ?? ''
+    if (!unidad) {
+      const m = notas.match(/^\[([^\]]+)\]\s*(.*)$/)
+      if (m) { unidad = m[1]; notas = m[2] }
+    }
     setModalForm({
       sku: a.sku ?? '',
       producto: a.producto,
@@ -243,9 +250,9 @@ export default function JornadaPage() {
       turno: a.turno,
       personal_planeado: a.personal_planeado?.toString() ?? '',
       cantidad: a.cantidad.toString(),
-      unidad: a.unidad ?? 'UND',
+      unidad: unidad || 'UND',
       lote: a.lote ?? '',
-      notas: a.notas ?? '',
+      notas,
     })
     setModalError('')
   }
@@ -255,6 +262,10 @@ export default function JornadaPage() {
     if (!modalEdit) return
     setModalSaving(true)
     setModalError('')
+    // unidad se guarda como prefijo [UND] en notas si la columna no existe en la BD
+    const unidad = modalForm.unidad || ''
+    const notasBase = modalForm.notas || ''
+    const notasConUnidad = unidad ? (notasBase ? `[${unidad}] ${notasBase}` : `[${unidad}]`) : (notasBase || null)
     const body = {
       sku: modalForm.sku || null,
       producto: modalForm.producto,
@@ -262,9 +273,8 @@ export default function JornadaPage() {
       turno: modalForm.turno,
       personal_planeado: modalForm.personal_planeado ? parseInt(modalForm.personal_planeado) : null,
       cantidad: parseInt(modalForm.cantidad),
-      unidad: modalForm.unidad || null,
       lote: modalForm.lote || null,
-      notas: modalForm.notas || null,
+      notas: notasConUnidad,
     }
     const res = await fetch(`/api/actividades/${modalEdit.id}`, {
       method: 'PUT',
