@@ -29,7 +29,7 @@ function GaugeMeter({ pct, proceso, meta, ejecutado }: { pct: number; proceso: s
   const nx = cx + r * Math.cos(a), ny = cy - r * Math.sin(a)
   return (
     <div className="flex flex-col items-center rounded-lg px-1 pt-1 pb-1 hover:brightness-110 transition-all"
-      style={{ background: '#0d1a08', border: `1px solid ${border}` }}>
+      style={{ background: '#1a3a1a', border: `1px solid ${border}` }}>
       <svg viewBox="0 0 64 50" className="w-full">
         {/* track */}
         <path d={`M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}`}
