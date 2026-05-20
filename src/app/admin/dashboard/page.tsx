@@ -18,6 +18,42 @@ type DashboardData = {
   kpis: KPIs; por_proceso: FilaProceso[]; por_dia: FilaDia[]; por_actividad: FilaActividad[]
 }
 
+function GaugeMeter({ pct, proceso, meta, ejecutado }: { pct: number; proceso: string; meta: number; ejecutado: number }) {
+  const r = 38, cx = 60, cy = 56
+  const arcLen = Math.PI * r
+  const dashLen = arcLen * Math.min(pct, 100) / 100
+  const color   = pct >= 90 ? '#10b981' : pct >= 70 ? '#f59e0b' : '#ef4444'
+  const track   = pct >= 90 ? '#052e16' : pct >= 70 ? '#3a1f04' : '#2d0808'
+  const border  = pct >= 90 ? '#166534' : pct >= 70 ? '#78350f' : '#7f1d1d'
+  return (
+    <div className="flex flex-col items-center rounded-2xl p-2 transition-colors hover:brightness-110"
+      style={{ background: '#0d1a08', border: `1px solid ${border}` }}>
+      <svg viewBox="0 0 120 72" className="w-full">
+        {/* track */}
+        <path d={`M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}`}
+          fill="none" stroke={track} strokeWidth="12" strokeLinecap="round" />
+        {/* progress */}
+        {pct > 0 && (
+          <path d={`M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}`}
+            fill="none" stroke={color} strokeWidth="12" strokeLinecap="round"
+            strokeDasharray={`${dashLen} ${arcLen}`} />
+        )}
+        {/* needle dot */}
+        {(() => {
+          const a = Math.PI * (1 - Math.min(pct,100)/100)
+          const nx = cx + r * Math.cos(a), ny = cy - r * Math.sin(a)
+          return <circle cx={nx} cy={ny} r="5" fill={color} opacity="0.9" />
+        })()}
+        {/* percentage */}
+        <text x={cx} y={cy - 2} textAnchor="middle" fill="white" fontSize="20" fontWeight="900" fontFamily="system-ui,sans-serif">{pct}%</text>
+        {/* numbers */}
+        <text x={cx} y={cy + 13} textAnchor="middle" fill="#6b9a60" fontSize="6.5">{ejecutado.toLocaleString()} / {meta.toLocaleString()}</text>
+      </svg>
+      <p className="text-white text-[11px] font-bold text-center leading-tight mt-0.5 px-1">{proceso}</p>
+    </div>
+  )
+}
+
 function colorPct(pct: number) {
   return pct >= 90 ? 'text-emerald-400' : pct >= 70 ? 'text-yellow-400' : 'text-red-600'
 }
@@ -192,29 +228,17 @@ export default function DashboardPage() {
           </div>
 
           {/* ── SEGUNDA FILA: Procesos + Gráfica ── */}
-          <div className={`grid gap-4 mb-7 ${data.por_dia.length > 1 ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
+          <div className={`grid gap-4 mb-7 ${data.por_dia.length > 1 ? 'grid-cols-1 lg:grid-cols-[1fr_auto]' : 'grid-cols-1'}`}>
 
-            {/* Por proceso */}
+            {/* Por proceso — medidores */}
             <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
               <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
                 <h2 className="text-white font-semibold">Resumen por proceso</h2>
                 <span className="text-gray-500 text-xs">{data.por_proceso.length} procesos</span>
               </div>
-              <div className="divide-y divide-gray-800/60">
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 gap-2 p-3">
                 {data.por_proceso.map(row => (
-                  <div key={row.proceso} className="px-5 py-3 hover:bg-gray-800/30 transition-colors">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-white text-sm font-medium">{row.proceso}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-gray-400 text-xs">{row.ejecutado.toLocaleString()} / {row.meta.toLocaleString()}</span>
-                        <span className={`text-sm font-bold w-12 text-right ${colorPct(row.cumplimiento)}`}>{row.cumplimiento}%</span>
-                      </div>
-                    </div>
-                    <div className="w-full bg-gray-800 rounded-full h-1.5">
-                      <div className={`h-1.5 rounded-full transition-all ${bgPct(row.cumplimiento)}`}
-                        style={{ width: `${Math.min(100, row.cumplimiento)}%` }} />
-                    </div>
-                  </div>
+                  <GaugeMeter key={row.proceso} pct={row.cumplimiento} proceso={row.proceso} meta={row.meta} ejecutado={row.ejecutado} />
                 ))}
               </div>
             </div>
