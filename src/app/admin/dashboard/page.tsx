@@ -18,13 +18,36 @@ type DashboardData = {
   kpis: KPIs; por_proceso: FilaProceso[]; por_dia: FilaDia[]; por_actividad: FilaActividad[]
 }
 
+function gaugeColor(pct: number) {
+  // Escala de color continua: rojo → naranja → amarillo → lima → verde
+  const stops = [
+    { p: 0,   r: 220, g: 38,  b: 38  }, // rojo
+    { p: 20,  r: 234, g: 88,  b: 12  }, // naranja oscuro
+    { p: 40,  r: 245, g: 158, b: 11  }, // ámbar
+    { p: 60,  r: 202, g: 193, b: 0   }, // amarillo-lima
+    { p: 75,  r: 132, g: 204, b: 22  }, // lima
+    { p: 80,  r: 34,  g: 197, b: 94  }, // verde medio
+    { p: 100, r: 16,  g: 185, b: 129 }, // esmeralda
+  ]
+  const clamped = Math.min(100, Math.max(0, pct))
+  let a = stops[0], b = stops[stops.length - 1]
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (clamped >= stops[i].p && clamped <= stops[i + 1].p) { a = stops[i]; b = stops[i + 1]; break }
+  }
+  const t = a.p === b.p ? 0 : (clamped - a.p) / (b.p - a.p)
+  const ri = Math.round(a.r + (b.r - a.r) * t)
+  const gi = Math.round(a.g + (b.g - a.g) * t)
+  const bi = Math.round(a.b + (b.b - a.b) * t)
+  return `rgb(${ri},${gi},${bi})`
+}
+
 function GaugeMeter({ pct, proceso, meta, ejecutado }: { pct: number; proceso: string; meta: number; ejecutado: number }) {
   const r = 22, cx = 32, cy = 28
   const arcLen = Math.PI * r
   const dashLen = arcLen * Math.min(pct, 100) / 100
-  const color  = pct >= 90 ? '#10b981' : pct >= 70 ? '#f59e0b' : '#ef4444'
-  const track  = pct >= 90 ? '#052e16' : pct >= 70 ? '#3a1f04' : '#2d0808'
-  const border = pct >= 90 ? '#166534' : pct >= 70 ? '#78350f' : '#7f1d1d'
+  const color  = gaugeColor(pct)
+  const track  = 'rgba(0,0,0,0.35)'
+  const border = pct >= 80 ? '#166534' : pct >= 60 ? '#3a5a10' : pct >= 40 ? '#6b4a08' : pct >= 20 ? '#7a3008' : '#7f1d1d'
   const a = Math.PI * (1 - Math.min(pct, 100) / 100)
   const nx = cx + r * Math.cos(a), ny = cy - r * Math.sin(a)
   return (
@@ -54,22 +77,22 @@ function GaugeMeter({ pct, proceso, meta, ejecutado }: { pct: number; proceso: s
 }
 
 function colorPct(pct: number) {
-  return pct >= 90 ? 'text-emerald-400' : pct >= 70 ? 'text-yellow-400' : 'text-red-600'
+  return pct >= 80 ? 'text-emerald-400' : pct >= 60 ? 'text-lime-400' : pct >= 40 ? 'text-yellow-400' : pct >= 20 ? 'text-orange-400' : 'text-red-500'
 }
 function bgPct(pct: number) {
-  return pct >= 90 ? 'bg-emerald-500' : pct >= 70 ? 'bg-yellow-500' : 'bg-red-600'
+  return pct >= 80 ? 'bg-emerald-500' : pct >= 60 ? 'bg-lime-500' : pct >= 40 ? 'bg-yellow-500' : pct >= 20 ? 'bg-orange-500' : 'bg-red-600'
 }
 function borderPct(pct: number) {
-  return pct >= 90 ? 'border-emerald-800/60' : pct >= 70 ? 'border-yellow-800/60' : 'border-red-700'
+  return pct >= 80 ? 'border-emerald-800/60' : pct >= 60 ? 'border-lime-800/60' : pct >= 40 ? 'border-yellow-800/60' : 'border-red-700'
 }
 function bgCardPct(pct: number) {
-  return pct >= 90 ? 'bg-emerald-950/40' : pct >= 70 ? 'bg-yellow-950/40' : 'bg-red-950/60'
+  return pct >= 80 ? 'bg-emerald-950/40' : pct >= 60 ? 'bg-lime-950/40' : pct >= 40 ? 'bg-yellow-950/40' : 'bg-red-950/60'
 }
 function labelPct(pct: number) {
-  return pct >= 90 ? 'En meta' : pct >= 70 ? 'Por mejorar' : 'Bajo meta'
+  return pct >= 80 ? 'En meta' : pct >= 60 ? 'Cerca de meta' : pct >= 40 ? 'Por mejorar' : pct >= 20 ? 'Bajo meta' : 'Crítico'
 }
 function dotPct(pct: number) {
-  return pct >= 90 ? '🟢' : pct >= 70 ? '🟡' : '🔴'
+  return pct >= 80 ? '🟢' : pct >= 60 ? '🟡' : pct >= 40 ? '🟠' : '🔴'
 }
 function fmtMin(min: number) {
   if (min === 0) return '0 min'
