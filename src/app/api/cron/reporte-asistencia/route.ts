@@ -167,7 +167,7 @@ export async function GET(request: NextRequest) {
   const enPlanta = (registros ?? []).filter(r => !r.hora_salida).length
 
   const { data: emailData, error: emailError } = await resend.emails.send({
-    from: 'ProdPlan <asistencia@justopago.com.co>',
+    from: 'ProdPlan Asistencia <onboarding@resend.dev>',
     to,
     subject: `Asistencia ${fecha} · ${horaEnvio} COT · ${enPlanta} en planta`,
     html,
