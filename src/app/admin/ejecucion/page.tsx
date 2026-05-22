@@ -56,6 +56,50 @@ export default function AdminEjecucionPage() {
   const [sortField, setSortField] = useState<SortField>('proceso')
   const [sortDir, setSortDir] = useState<SortDir>('asc')
   const [filtroProceso, setFiltroProceso] = useState('')
+  const [modalHora, setModalHora] = useState<{ actividadId: string; hora: string } | null>(null)
+  const [modalCantidad, setModalCantidad] = useState('')
+  const [modalTiempo, setModalTiempo] = useState('')
+  const [modalObs, setModalObs] = useState('')
+  const [causales, setCausales] = useState<string[]>([])
+  const [modalSaving, setModalSaving] = useState(false)
+  const [modalError, setModalError] = useState('')
+
+  useEffect(() => {
+    fetch('/api/causales-paro').then(r => r.json())
+      .then(d => { if (Array.isArray(d)) setCausales(d.filter((c: { activo: boolean }) => c.activo).map((c: { nombre: string }) => c.nombre)) })
+      .catch(() => {})
+  }, [])
+
+  function abrirModalHora(actividadId: string, hora: string) {
+    const rep = (reportes[actividadId] || []).find(r => r.hora === hora)
+    setModalHora({ actividadId, hora })
+    setModalCantidad(rep ? String(rep.cantidad) : '')
+    setModalTiempo(rep?.tiempo_improductivo ? String(rep.tiempo_improductivo) : '')
+    setModalObs(rep?.observacion || '')
+    setModalError('')
+  }
+
+  async function guardarHora(e: React.FormEvent) {
+    e.preventDefault()
+    if (!modalHora) return
+    const cant = parseInt(modalCantidad)
+    if (isNaN(cant) || cant < 0) { setModalError('Cantidad inválida'); return }
+    setModalSaving(true)
+    setModalError('')
+    const body = {
+      actividad_id: modalHora.actividadId,
+      hora: modalHora.hora,
+      cantidad: cant,
+      tiempo_improductivo: modalTiempo ? parseInt(modalTiempo) : null,
+      observacion: modalObs || null,
+    }
+    const res = await fetch('/api/reportes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const data = await res.json()
+    if (!res.ok) { setModalError(data.error || 'Error al guardar'); setModalSaving(false); return }
+    await cargarReportes(modalHora.actividadId)
+    setModalHora(null)
+    setModalSaving(false)
+  }
 
   const cargarReportes = useCallback(async (id: string) => {
     const res = await fetch(`/api/reportes?actividad_id=${id}`)
@@ -356,23 +400,25 @@ export default function AdminEjecucionPage() {
                               {horasTurno(a.turno).map(hora => {
                                 const rep = reps.find(r => r.hora === hora)
                                 return (
-                                  <div key={hora}
-                                    className="rounded-lg p-2 text-center text-xs"
+                                  <button key={hora} type="button"
+                                    onClick={() => abrirModalHora(a.id, hora)}
+                                    className="rounded-lg p-2 text-center text-xs transition-all hover:scale-[1.04] hover:brightness-125 active:scale-95"
                                     style={{
                                       background: rep ? 'rgba(16,80,20,0.55)' : '#111e0c',
                                       border: rep ? '1px solid #2a6e20' : '1px solid #1a3010',
                                     }}>
                                     <div className="font-mono text-[10px]" style={{ color: '#6b9a60' }}>{hora.slice(0, 5)}</div>
-                                    <div className="font-bold text-white mt-0.5">{rep ? rep.cantidad.toLocaleString() : <span style={{ color: '#2a4a22' }}>—</span>}</div>
+                                    <div className="font-bold text-white mt-0.5">{rep ? rep.cantidad.toLocaleString() : <span style={{ color: '#3a6a30' }}>+</span>}</div>
                                     {rep?.tiempo_improductivo ? (
                                       <div className="text-[9px] text-orange-400 font-semibold mt-0.5" title={rep.observacion || ''}>
                                         {rep.tiempo_improductivo}min⚠
                                       </div>
                                     ) : null}
-                                  </div>
+                                  </button>
                                 )
                               })}
                             </div>
+                            <p className="text-[10px] mt-2" style={{ color: '#3a6228' }}>Clic en cualquier hora para ingresar o editar unidades</p>
                           </td>
                         </tr>
                       )}
@@ -383,6 +429,66 @@ export default function AdminEjecucionPage() {
             </table>
           </div>
         </>
+      )}
+
+      {/* ── Modal ingreso hora ── */}
+      {modalHora && (
+        <div className="fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50"
+          onClick={e => { if (e.target === e.currentTarget) setModalHora(null) }}>
+          <form onSubmit={guardarHora}
+            className="rounded-2xl p-6 w-full max-w-sm flex flex-col gap-4 shadow-2xl"
+            style={{ background: '#1a3412', border: '1px solid #3a6228' }}>
+
+            <div>
+              <p className="text-gray-400 text-xs font-semibold uppercase tracking-widest mb-0.5">Hora</p>
+              <p className="text-white font-bold text-lg">{modalHora.hora}</p>
+              <p className="text-gray-500 text-xs">{fecha}</p>
+            </div>
+
+            <div>
+              <label className="text-gray-400 text-xs block mb-1">Unidades producidas *</label>
+              <input
+                autoFocus required type="number" min={0}
+                value={modalCantidad} onChange={e => setModalCantidad(e.target.value)}
+                placeholder="0"
+                className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 text-lg font-bold focus:outline-none focus:border-green-500 text-center"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-gray-400 text-xs block mb-1">Tiempo improductivo (min)</label>
+                <input type="number" min={0} max={60}
+                  value={modalTiempo} onChange={e => setModalTiempo(e.target.value)}
+                  placeholder="0"
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-orange-500"
+                />
+              </div>
+              <div>
+                <label className="text-gray-400 text-xs block mb-1">Causal de paro</label>
+                <select value={modalObs} onChange={e => setModalObs(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-orange-500 appearance-none">
+                  <option value="">— ninguno —</option>
+                  {causales.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+            </div>
+
+            {modalError && <p className="text-red-400 text-sm">{modalError}</p>}
+
+            <div className="flex gap-3 pt-1">
+              <button type="submit" disabled={modalSaving}
+                className="flex-1 text-white font-bold py-2.5 rounded-xl disabled:opacity-50 transition-all hover:scale-[1.02]"
+                style={{ background: 'linear-gradient(135deg,#2e6e20,#3d8830)', border: '1px solid #5aaa40' }}>
+                {modalSaving ? 'Guardando...' : 'Guardar'}
+              </button>
+              <button type="button" onClick={() => setModalHora(null)}
+                className="px-4 text-gray-400 hover:text-white rounded-xl hover:bg-gray-800 transition-colors text-sm">
+                Cancelar
+              </button>
+            </div>
+          </form>
+        </div>
       )}
 
       {/* Modal Lote */}
