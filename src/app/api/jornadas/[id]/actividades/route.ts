@@ -66,7 +66,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   // Intentar con campo unidad; si el schema no lo tiene, guardarlo en notas
   const { data, error } = await supabase
     .from('actividades')
-    .insert({ ...body, jornada_id: id })
+    .insert({ ...body, jornada_id: id, origen: 'manual' })
     .select()
     .single()
 
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         : bodyRest.notas
       const { data: data2, error: error2 } = await supabase
         .from('actividades')
-        .insert({ ...bodyRest, notas: notasConUnidad || null, jornada_id: id })
+        .insert({ ...bodyRest, notas: notasConUnidad || null, jornada_id: id, origen: 'manual' })
         .select()
         .single()
       if (error2) return NextResponse.json({ error: error2.message }, { status: 400 })
@@ -100,7 +100,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   }
   const supabase = await createClient()
 
-  const rows = actividades.map((a: Record<string, unknown>) => ({ ...a, jornada_id: id }))
+  const rows = actividades.map((a: Record<string, unknown>) => ({ ...a, jornada_id: id, origen: 'excel' }))
 
   const { data, error } = await supabase.from('actividades').insert(rows).select()
 
@@ -112,7 +112,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         const notasConUnidad = unidad
           ? (rest.notas ? `[${unidad}] ${rest.notas}` : `[${unidad}]`)
           : rest.notas
-        return { ...rest, notas: notasConUnidad || null, jornada_id: id }
+        return { ...rest, notas: notasConUnidad || null, jornada_id: id, origen: 'excel' }
       })
       const { data: data2, error: error2 } = await supabase.from('actividades').insert(rowsFallback).select()
       if (error2) return NextResponse.json({ error: error2.message }, { status: 400 })

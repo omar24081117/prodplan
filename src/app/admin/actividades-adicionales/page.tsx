@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { RefreshCw, TrendingUp } from 'lucide-react'
 
-/* ── Colores por cumplimiento (misma escala que dashboard) ─────────────── */
+/* ── Colores por cumplimiento ─────────────────────────────────────────── */
 function gaugeColor(pct: number) {
   const stops = [
     { p: 0,   r: 220, g: 38,  b: 38  },
@@ -20,79 +20,57 @@ function gaugeColor(pct: number) {
     if (c >= stops[i].p && c <= stops[i + 1].p) { a = stops[i]; b = stops[i + 1]; break }
   }
   const t = a.p === b.p ? 0 : (c - a.p) / (b.p - a.p)
-  return `rgb(${Math.round(a.r + (b.r - a.r) * t)},${Math.round(a.g + (b.g - a.g) * t)},${Math.round(a.b + (b.b - a.b) * t)})`
-}
-function borderColor(pct: number) {
-  return pct >= 80 ? '#166534' : pct >= 60 ? '#3a5a10' : pct >= 40 ? '#6b4a08' : pct >= 20 ? '#7a3008' : '#7f1d1d'
+  return `rgb(${Math.round(a.r+(b.r-a.r)*t)},${Math.round(a.g+(b.g-a.g)*t)},${Math.round(a.b+(b.b-a.b)*t)})`
 }
 
-/* ── Gauge por actividad ────────────────────────────────────────────────── */
-function ActividadGauge({ producto, proceso, turno, meta, ejecutado, lote, sku }:
-  { producto: string; proceso: string; turno: string; meta: number; ejecutado: number; lote: string | null; sku: string | null }) {
-  const pct = meta > 0 ? Math.min(100, Math.round((ejecutado / meta) * 100)) : 0
-  const r = 34, cx = 48, cy = 42
+/* ── Gauge ────────────────────────────────────────────────────────────── */
+function GaugeMeter({ pct, label, sublabel, ejecutado, meta }: {
+  pct: number; label: string; sublabel: string; ejecutado: number; meta: number
+}) {
+  const r = 28, cx = 40, cy = 38
   const arcLen = Math.PI * r
-  const dashLen = arcLen * pct / 100
-  const color = gaugeColor(pct)
-  const border = borderColor(pct)
-  const a = Math.PI * (1 - pct / 100)
+  const dashLen = arcLen * Math.min(pct, 100) / 100
+  const color  = gaugeColor(pct)
+  const track  = 'rgba(0,0,0,0.35)'
+  const border = pct >= 80 ? '#166534' : pct >= 60 ? '#3a5a10' : pct >= 40 ? '#6b4a08' : pct >= 20 ? '#7a3008' : '#7f1d1d'
+  const a = Math.PI * (1 - Math.min(pct, 100) / 100)
   const nx = cx + r * Math.cos(a), ny = cy - r * Math.sin(a)
 
-  const turnoBg = turno === 'MAÑANA' ? '#78350f' : turno === 'TARDE' ? '#7c2d12' : '#1e3a5f'
-  const turnoColor = turno === 'MAÑANA' ? '#fde68a' : turno === 'TARDE' ? '#fed7aa' : '#bfdbfe'
-  const prod = producto.length > 22 ? producto.slice(0, 20) + '…' : producto
-
   return (
-    <div className="flex flex-col rounded-xl overflow-hidden transition-all hover:brightness-110"
+    <div className="flex flex-col items-center rounded-xl px-1 pt-1 pb-1.5 hover:brightness-110 transition-all"
       style={{ background: '#1a3a1a', border: `1px solid ${border}` }}>
-
-      {/* Cabecera proceso + turno */}
-      <div className="flex items-center justify-between px-2.5 pt-2 pb-1">
-        <span className="text-[10px] font-bold text-white tracking-wide">{proceso}</span>
-        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded"
-          style={{ background: turnoBg, color: turnoColor }}>{turno.slice(0, 3)}</span>
-      </div>
-
-      {/* Gauge SVG */}
-      <svg viewBox="0 0 96 58" className="w-full px-1">
-        {/* track */}
+      <svg viewBox="0 0 80 56" className="w-full">
         <path d={`M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}`}
-          fill="none" stroke="rgba(0,0,0,0.4)" strokeWidth="9" strokeLinecap="round" />
-        {/* progress */}
+          fill="none" stroke={track} strokeWidth="8" strokeLinecap="round" />
         {pct > 0 && (
           <path d={`M ${cx-r} ${cy} A ${r} ${r} 0 0 1 ${cx+r} ${cy}`}
-            fill="none" stroke={color} strokeWidth="9" strokeLinecap="round"
+            fill="none" stroke={color} strokeWidth="8" strokeLinecap="round"
             strokeDasharray={`${dashLen} ${arcLen}`} />
         )}
-        {/* needle */}
         <circle cx={nx} cy={ny} r="4" fill={color} />
-        {/* % */}
-        <text x={cx} y={cy + 2} textAnchor="middle" fill="white" fontSize="16" fontWeight="900"
+        <text x={cx} y={cy + 1} textAnchor="middle" fill="white" fontSize="14" fontWeight="900"
           fontFamily="system-ui,sans-serif">{pct}%</text>
-        {/* ejecutado / meta */}
-        <text x={cx} y={cy + 14} textAnchor="middle" fill="#6b9a60" fontSize="5.5">
+        <text x={cx} y={cy + 12} textAnchor="middle" fill="#6b9a60" fontSize="5">
           {ejecutado.toLocaleString()} / {meta.toLocaleString()}
         </text>
+        {/* proceso */}
+        <text x={cx} y={cy + 21} textAnchor="middle" fill="#9ca3af" fontSize="5" fontWeight="700">{sublabel}</text>
       </svg>
-
-      {/* Descripción */}
-      <div className="px-2.5 pb-2">
-        <p className="text-white text-[10px] font-semibold leading-tight">{prod}</p>
-        {sku && <p className="text-gray-500 text-[9px] font-mono">{sku}</p>}
-        {lote && <p className="text-amber-400 text-[9px] font-mono">Lote: {lote}</p>}
-      </div>
+      {/* nombre actividad */}
+      <p className="text-white text-[9px] font-semibold text-center leading-tight px-1 mt-0.5">{label}</p>
     </div>
   )
 }
 
-/* ── Tipos ───────────────────────────────────────────────────────────────── */
+/* ── Tipos ──────────────────────────────────────────────────────────────── */
 type Actividad = {
   id: string; sku: string | null; producto: string; proceso: string
-  turno: string; cantidad: number; lote: string | null; personal_planeado: number | null
+  turno: string; cantidad: number; lote: string | null
+  personal_planeado: number | null; origen: string | null
 }
 type Reporte = { hora: string; cantidad: number }
 
-/* ── Página principal ───────────────────────────────────────────────────── */
+/* ── Página ─────────────────────────────────────────────────────────────── */
 export default function ActividadesAdicionalesPage() {
   const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
   const [fecha, setFecha] = useState(hoy)
@@ -109,11 +87,13 @@ export default function ActividadesAdicionalesPage() {
     if (!jornada) { setActividades([]); setReportes({}); setLoading(false); return }
 
     const aRes = await fetch(`/api/jornadas/${jornada.id}/actividades`)
-    const acts: Actividad[] = await aRes.json()
-    setActividades(Array.isArray(acts) ? acts : [])
+    const all: Actividad[] = await aRes.json()
+    // Solo actividades ingresadas manualmente
+    const manuales = Array.isArray(all) ? all.filter(a => a.origen === 'manual') : []
+    setActividades(manuales)
 
     const reps: Record<string, Reporte[]> = {}
-    await Promise.all((Array.isArray(acts) ? acts : []).map(async a => {
+    await Promise.all(manuales.map(async a => {
       const r = await fetch(`/api/reportes?actividad_id=${a.id}`)
       reps[a.id] = await r.json()
     }))
@@ -123,29 +103,26 @@ export default function ActividadesAdicionalesPage() {
 
   useEffect(() => { cargar() }, [cargar])
 
-  function ejecutadoAct(id: string) {
+  function ejecutado(id: string) {
     return (reportes[id] || []).reduce((s, r) => s + r.cantidad, 0)
   }
 
   const procesos = [...new Set(actividades.map(a => a.proceso))].sort()
   const filtradas = filtroProceso ? actividades.filter(a => a.proceso === filtroProceso) : actividades
 
-  /* KPIs globales */
   const totalMeta = actividades.reduce((s, a) => s + a.cantidad, 0)
-  const totalEjec = actividades.reduce((s, a) => s + ejecutadoAct(a.id), 0)
+  const totalEjec = actividades.reduce((s, a) => s + ejecutado(a.id), 0)
   const pctGlobal = totalMeta > 0 ? Math.min(100, Math.round((totalEjec / totalMeta) * 100)) : 0
-  const completas = actividades.filter(a => {
-    const e = ejecutadoAct(a.id); return a.cantidad > 0 && e >= a.cantidad
-  }).length
+  const completas = actividades.filter(a => a.cantidad > 0 && ejecutado(a.id) >= a.cantidad).length
 
   return (
     <div className="max-w-6xl mx-auto">
 
-      {/* ── Encabezado ── */}
+      {/* Encabezado */}
       <div className="flex items-center gap-3 mb-6 flex-wrap">
         <div className="flex items-center gap-2">
-          <TrendingUp size={22} className="text-green-400" />
-          <h1 className="text-2xl font-bold text-white">Actividades del Plan</h1>
+          <TrendingUp size={20} className="text-green-400" />
+          <h1 className="text-2xl font-bold text-white">Actividades Adicionales</h1>
         </div>
         <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
           className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none" />
@@ -160,67 +137,70 @@ export default function ActividadesAdicionalesPage() {
           <p className="text-gray-400 text-sm">Cargando...</p>
         </div>
       ) : actividades.length === 0 ? (
-        <div className="text-center py-16 text-gray-500">
-          <p>No hay actividades para el {fecha}</p>
+        <div className="text-center py-20 text-gray-500">
+          <TrendingUp size={40} className="mx-auto mb-3 opacity-20" />
+          <p className="text-lg font-medium">Sin actividades adicionales</p>
+          <p className="text-sm mt-1">Las actividades agregadas individualmente desde Planeación aparecerán aquí</p>
         </div>
       ) : (
         <>
-          {/* ── KPIs ── */}
+          {/* KPIs */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
             {[
-              { label: 'Actividades', value: actividades.length, sub: 'en el plan', color: 'text-white' },
-              { label: 'Completadas', value: completas, sub: `de ${actividades.length}`, color: 'text-emerald-400' },
-              { label: 'Meta total', value: totalMeta.toLocaleString(), sub: 'unidades', color: 'text-white' },
-              { label: 'Ejecutado', value: totalEjec.toLocaleString(), sub: `${pctGlobal}% cumplimiento`, color: gaugeColor(pctGlobal) },
+              { label: 'Actividades adicionales', value: actividades.length, sub: 'ingresadas manualmente', rgb: '#ffffff' },
+              { label: 'Completadas',  value: completas, sub: `de ${actividades.length}`, rgb: '#10b981' },
+              { label: 'Meta total',   value: totalMeta.toLocaleString(), sub: 'unidades', rgb: '#ffffff' },
+              { label: 'Ejecutado',    value: totalEjec.toLocaleString(), sub: `${pctGlobal}% cumplimiento`, rgb: gaugeColor(pctGlobal) },
             ].map(k => (
               <div key={k.label} className="bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
                 <p className="text-gray-500 text-[10px] font-semibold uppercase tracking-widest">{k.label}</p>
-                <p className="text-2xl font-black mt-0.5" style={{ color: k.color }}>{k.value}</p>
+                <p className="text-2xl font-black mt-0.5" style={{ color: k.rgb }}>{k.value}</p>
                 <p className="text-gray-600 text-[10px] mt-0.5">{k.sub}</p>
               </div>
             ))}
           </div>
 
-          {/* ── Filtros proceso ── */}
-          <div className="flex gap-2 flex-wrap mb-4">
-            <button onClick={() => setFiltroProceso('')}
-              className="text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors"
-              style={{ background: !filtroProceso ? '#2e6e20' : '#1e3a14', border: '1px solid #3a6228', color: !filtroProceso ? '#fff' : '#7aaa66' }}>
-              Todos ({actividades.length})
-            </button>
-            {procesos.map(p => {
-              const cnt = actividades.filter(a => a.proceso === p).length
-              const ejPct = (() => {
-                const acts = actividades.filter(a => a.proceso === p)
-                const m = acts.reduce((s, a) => s + a.cantidad, 0)
-                const e = acts.reduce((s, a) => s + ejecutadoAct(a.id), 0)
-                return m > 0 ? Math.round((e / m) * 100) : 0
-              })()
-              return (
+          {/* Filtros proceso */}
+          {procesos.length > 1 && (
+            <div className="flex gap-2 flex-wrap mb-4">
+              <button onClick={() => setFiltroProceso('')}
+                className="text-xs px-3 py-1.5 rounded-lg font-semibold"
+                style={{ background: !filtroProceso ? '#2e6e20' : '#1e3a14', border: '1px solid #3a6228', color: !filtroProceso ? '#fff' : '#7aaa66' }}>
+                Todos ({actividades.length})
+              </button>
+              {procesos.map(p => (
                 <button key={p} onClick={() => setFiltroProceso(p)}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold transition-colors"
+                  className="text-xs px-3 py-1.5 rounded-lg font-semibold"
                   style={{ background: filtroProceso === p ? '#2e6e20' : '#1e3a14', border: '1px solid #3a6228', color: filtroProceso === p ? '#fff' : '#7aaa66' }}>
-                  {p} ({cnt})
-                  <span className="font-mono text-[10px]" style={{ color: gaugeColor(ejPct) }}>{ejPct}%</span>
+                  {p} ({actividades.filter(a => a.proceso === p).length})
                 </button>
-              )
-            })}
-          </div>
+              ))}
+            </div>
+          )}
 
-          {/* ── Grid de gauges ── */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
-            {filtradas.map(a => (
-              <ActividadGauge
-                key={a.id}
-                producto={a.producto}
-                proceso={a.proceso}
-                turno={a.turno}
-                meta={a.cantidad}
-                ejecutado={ejecutadoAct(a.id)}
-                lote={a.lote}
-                sku={a.sku}
-              />
-            ))}
+          {/* Grid gauges — igual que resumen por proceso del dashboard */}
+          <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+              <h2 className="text-white font-semibold">Resumen por actividad adicional</h2>
+              <span className="text-gray-500 text-xs">{filtradas.length} actividades</span>
+            </div>
+            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-1.5 p-3">
+              {filtradas.map(a => {
+                const ejec = ejecutado(a.id)
+                const pct  = a.cantidad > 0 ? Math.min(100, Math.round((ejec / a.cantidad) * 100)) : 0
+                const prod = a.producto.length > 18 ? a.producto.slice(0, 16) + '…' : a.producto
+                return (
+                  <GaugeMeter
+                    key={a.id}
+                    pct={pct}
+                    label={prod}
+                    sublabel={a.proceso}
+                    ejecutado={ejec}
+                    meta={a.cantidad}
+                  />
+                )
+              })}
+            </div>
           </div>
         </>
       )}
