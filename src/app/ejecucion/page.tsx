@@ -44,6 +44,33 @@ type SortDir = 'asc' | 'desc'
 
 export default function EjecucionPage() {
   const [operario, setOperario] = useState<OperarioSession | null>(null)
+  const [cedulaInput, setCedulaInput] = useState('')
+  const [loginError, setLoginError] = useState('')
+  const [loginLoading, setLoginLoading] = useState(false)
+
+  async function identificarse(e: React.FormEvent) {
+    e.preventDefault()
+    setLoginLoading(true)
+    setLoginError('')
+    try {
+      const res = await fetch('/api/auth/operario', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cedula: cedulaInput.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setLoginError(data.error || 'Cédula no encontrada')
+      } else {
+        setOperario({ cedula: cedulaInput.trim(), nombre: data.nombre })
+        setCedulaInput('')
+      }
+    } catch {
+      setLoginError('Error de conexión')
+    } finally {
+      setLoginLoading(false)
+    }
+  }
   const [actividades, setActividades] = useState<Actividad[]>([])
   const [reportes, setReportes] = useState<Record<string, Reporte[]>>({})
   const [asignadosPor, setAsignadosPor] = useState<Record<string, OperarioAsignado[]>>({})
@@ -203,6 +230,42 @@ export default function EjecucionPage() {
     <main className="min-h-screen flex items-center justify-center"
       style={{ background: 'linear-gradient(145deg, #b8c4a4 0%, #ccd8b4 40%, #bfcbaa 70%, #b4c0a0 100%)' }}>
       <p style={{ color: '#3a4e28' }}>Cargando jornada...</p>
+    </main>
+  )
+
+  // Si no hay sesión, mostrar identificación rápida por cédula
+  if (!operario) return (
+    <main className="min-h-screen flex items-center justify-center p-6"
+      style={{ background: 'linear-gradient(145deg, #b8c4a4 0%, #ccd8b4 40%, #bfcbaa 70%, #b4c0a0 100%)' }}>
+      <div className="w-full max-w-xs">
+        <div className="text-center mb-6">
+          <div className="text-4xl mb-2">👷</div>
+          <h1 className="text-2xl font-bold" style={{ color: '#1a3010' }}>Identificación</h1>
+          <p className="text-sm mt-1" style={{ color: '#4a6a35' }}>Ingresa tu cédula para continuar</p>
+        </div>
+        <form onSubmit={identificarse} className="flex flex-col gap-3">
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder="Número de cédula"
+            value={cedulaInput}
+            onChange={e => setCedulaInput(e.target.value)}
+            autoFocus
+            required
+            className="bg-white/80 border border-green-300 text-gray-900 rounded-xl px-4 py-4 text-xl text-center font-bold focus:outline-none focus:border-green-600"
+          />
+          {loginError && <p className="text-red-700 text-sm text-center font-medium">{loginError}</p>}
+          <button type="submit" disabled={loginLoading}
+            className="w-full text-white font-bold rounded-xl py-4 text-lg disabled:opacity-50 transition-all"
+            style={{ background: 'linear-gradient(135deg, #2e6e20, #3d8830)', border: '1px solid #5aaa40' }}>
+            {loginLoading ? 'Verificando...' : 'Entrar →'}
+          </button>
+          <button type="button" onClick={() => location.href = '/'}
+            className="text-sm text-center mt-1" style={{ color: '#5a7045' }}>
+            ← Volver al inicio
+          </button>
+        </form>
+      </div>
     </main>
   )
 

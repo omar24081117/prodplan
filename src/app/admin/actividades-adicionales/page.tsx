@@ -68,7 +68,10 @@ type SortDir   = 'asc' | 'desc'
 /* ── Página ─────────────────────────────────────────────────────────────── */
 export default function ActividadesAdicionalesPage() {
   const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
+  const [modo, setModo]             = useState<'dia' | 'rango'>('dia')
   const [fecha, setFecha]           = useState(hoy)
+  const [desde, setDesde]           = useState(hoy)
+  const [hasta, setHasta]           = useState(hoy)
   const [actividades, setActividades] = useState<Actividad[]>([])
   const [reportes, setReportes]     = useState<Record<string, Reporte[]>>({})
   const [loading, setLoading]       = useState(true)
@@ -76,28 +79,37 @@ export default function ActividadesAdicionalesPage() {
   const [sortField, setSortField]   = useState<SortField>('proceso')
   const [sortDir, setSortDir]       = useState<SortDir>('asc')
   const [expandida, setExpandida]   = useState<string | null>(null)
-  const [soloManuales, setSoloManuales] = useState(false)
+  const [soloManuales, setSoloManuales] = useState(true)
 
   const cargar = useCallback(async () => {
     setLoading(true)
     const jRes = await fetch('/api/jornadas')
-    const jornadas = await jRes.json()
-    const jornada = jornadas.find((j: { fecha: string }) => j.fecha === fecha)
-    if (!jornada) { setActividades([]); setReportes({}); setLoading(false); return }
+    const jornadas: { id: string; fecha: string }[] = await jRes.json()
 
-    const aRes = await fetch(`/api/jornadas/${jornada.id}/actividades`)
-    const all: Actividad[] = await aRes.json()
-    const acts = Array.isArray(all) ? all : []
-    setActividades(acts)
+    // Filtrar jornadas según modo
+    const d1 = modo === 'dia' ? fecha : desde
+    const d2 = modo === 'dia' ? fecha : hasta
+    const jornadasRango = jornadas.filter(j => j.fecha >= d1 && j.fecha <= d2)
+
+    if (jornadasRango.length === 0) { setActividades([]); setReportes({}); setLoading(false); return }
+
+    // Cargar actividades de todas las jornadas del rango
+    const allActs: Actividad[] = []
+    await Promise.all(jornadasRango.map(async j => {
+      const aRes = await fetch(`/api/jornadas/${j.id}/actividades`)
+      const acts: Actividad[] = await aRes.json()
+      if (Array.isArray(acts)) allActs.push(...acts.map(a => ({ ...a, _fecha: j.fecha } as Actividad & { _fecha: string })))
+    }))
+    setActividades(allActs)
 
     const reps: Record<string, Reporte[]> = {}
-    await Promise.all(acts.map(async a => {
+    await Promise.all(allActs.map(async a => {
       const r = await fetch(`/api/reportes?actividad_id=${a.id}`)
       reps[a.id] = await r.json()
     }))
     setReportes(reps)
     setLoading(false)
-  }, [fecha])
+  }, [modo, fecha, desde, hasta])
 
   useEffect(() => { cargar() }, [cargar])
 
@@ -164,8 +176,31 @@ export default function ActividadesAdicionalesPage() {
           <TrendingUp size={20} className="text-green-400" />
           <h1 className="text-2xl font-bold text-white">Actividades Adicionales</h1>
         </div>
-        <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
-          className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none" />
+        {/* Toggle modo */}
+        <div className="flex gap-1 bg-gray-800 rounded-lg p-1">
+          {(['dia', 'rango'] as const).map(m => (
+            <button key={m} onClick={() => setModo(m)}
+              className="text-xs px-3 py-1 rounded-md font-semibold transition-colors"
+              style={{ background: modo === m ? '#2e6e20' : 'transparent', color: modo === m ? '#fff' : '#9ca3af' }}>
+              {m === 'dia' ? 'Por día' : 'Rango'}
+            </button>
+          ))}
+        </div>
+
+        {/* Inputs fecha */}
+        {modo === 'dia' ? (
+          <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
+            className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none" />
+        ) : (
+          <div className="flex items-center gap-2">
+            <input type="date" value={desde} onChange={e => setDesde(e.target.value)}
+              className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none" />
+            <span className="text-gray-500 text-sm">—</span>
+            <input type="date" value={hasta} onChange={e => setHasta(e.target.value)}
+              className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none" />
+          </div>
+        )}
+
         <button onClick={cargar} className="text-gray-400 hover:text-white px-3 py-2 bg-gray-800 rounded-lg">
           <RefreshCw size={14} />
         </button>

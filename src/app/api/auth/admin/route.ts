@@ -19,5 +19,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Contraseña incorrecta' }, { status: 401 })
   }
 
-  return NextResponse.json({ ok: true })
+  const res = NextResponse.json({ ok: true })
+  res.cookies.set('prodplan_modo', 'completo', { path: '/', httpOnly: false, maxAge: 60 * 60 * 8 })
+  return res
 }

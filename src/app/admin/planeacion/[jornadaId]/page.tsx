@@ -29,7 +29,7 @@ type Jornada = {
 type Actividad = {
   id: string; sku: string | null; producto: string; proceso: string; turno: string
   personal_planeado: number | null; cantidad: number; unidad: string | null
-  lote: string | null; notas: string | null; estandar: number | null
+  lote: string | null; notas: string | null; estandar: number | null; origen: string | null
 }
 type BaseProceso = { estandar: number; proceso: string; unidad: string | null }
 type ActImport = {
@@ -234,6 +234,16 @@ export default function JornadaPage() {
   async function eliminar(id: string) {
     if (!confirm('¿Eliminar esta actividad?')) return
     await fetch(`/api/actividades/${id}`, { method: 'DELETE' })
+    cargar()
+  }
+
+  async function toggleAdicional(a: Actividad) {
+    const nuevoOrigen = a.origen === 'manual' ? 'excel' : 'manual'
+    await fetch(`/api/actividades/${a.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ origen: nuevoOrigen }),
+    })
     cargar()
   }
 
@@ -610,7 +620,7 @@ export default function JornadaPage() {
             <table className="w-full text-sm min-w-[700px]">
               <thead>
                 <tr style={{ background: '#1e3a14' }}>
-                  {['PROCESO', 'TRIP', 'TURNO', 'REF', 'DESCRIPCIÓN', 'LOTE', 'UND', 'META', 'T.ESTIMADO', ''].map(h => (
+                  {['PROCESO', 'TRIP', 'TURNO', 'REF', 'DESCRIPCIÓN', 'LOTE', 'UND', 'META', 'T.ESTIMADO', '+ADIC', ''].map(h => (
                     <th key={h} className="px-3 py-2.5 text-left text-gray-400 font-semibold text-xs whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -649,6 +659,17 @@ export default function JornadaPage() {
                       ) : (
                         <span className="text-gray-600 text-xs">sin est.</span>
                       )}
+                    </td>
+                    {/* Adicional toggle */}
+                    <td className="px-3 py-2 text-center">
+                      <button onClick={() => toggleAdicional(a)}
+                        title={a.origen === 'manual' ? 'Marcada como adicional — clic para quitar' : 'Marcar como actividad adicional'}
+                        className="text-xs px-2 py-1 rounded-lg font-bold transition-colors border"
+                        style={a.origen === 'manual'
+                          ? { background: '#1e4a2e', color: '#4ade80', borderColor: '#166534' }
+                          : { background: '#1e3a14', color: '#4b5563', borderColor: '#2a4e1c' }}>
+                        {a.origen === 'manual' ? '✓ +' : '+'}
+                      </button>
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex gap-1">

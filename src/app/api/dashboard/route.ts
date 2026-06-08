@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
 
   const { data: actividades } = await supabase
     .from('actividades')
-    .select('id, jornada_id, sku, producto, proceso, turno, cantidad, personal_planeado, lote')
+    .select('id, jornada_id, sku, producto, proceso, turno, cantidad, personal_planeado, lote, origen')
     .in('jornada_id', jornadaIds)
     .order('proceso', { ascending: true })
 
@@ -74,6 +74,7 @@ export async function GET(request: NextRequest) {
   const personalTotal = actividades.reduce((s, a) => s + (a.personal_planeado || 0), 0)
   const tiempoImproductivoTotal = (reportes || []).reduce((s, r) => s + (r.tiempo_improductivo || 0), 0)
   const cumplimiento = metaTotal > 0 ? Math.round((ejecutadoTotal / metaTotal) * 100) : 0
+  const actividadesManuales = actividades.filter(a => a.origen === 'manual').length
 
   // Por proceso
   const procesosMap: Record<string, { meta: number; ejecutado: number }> = {}
@@ -158,7 +159,7 @@ export async function GET(request: NextRequest) {
   })
 
   return NextResponse.json({
-    kpis: { meta: metaTotal, ejecutado: ejecutadoTotal, cumplimiento, personal_planeado: personalTotal, tiempo_improductivo: tiempoImproductivoTotal },
+    kpis: { meta: metaTotal, ejecutado: ejecutadoTotal, cumplimiento, personal_planeado: personalTotal, tiempo_improductivo: tiempoImproductivoTotal, actividades_manuales: actividadesManuales },
     por_proceso,
     por_dia,
     por_actividad,

@@ -11,6 +11,8 @@ export async function GET() {
     .map(u => ({
       id: u.id,
       email: u.email,
+      nombre: u.user_metadata?.nombre || null,
+      panel_control: u.user_metadata?.panel_control === true,
       created_at: u.created_at,
       last_sign_in_at: u.last_sign_in_at,
     }))

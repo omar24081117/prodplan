@@ -1,10 +1,10 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList, ReferenceLine } from 'recharts'
 import { ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react'
 
-type KPIs = { meta: number; ejecutado: number; cumplimiento: number; personal_planeado: number; tiempo_improductivo: number }
+type KPIs = { meta: number; ejecutado: number; cumplimiento: number; personal_planeado: number; tiempo_improductivo: number; actividades_manuales: number }
 type FilaProceso = { proceso: string; meta: number; ejecutado: number; cumplimiento: number }
 type FilaDia = { fecha: string; meta: number; ejecutado: number; cumplimiento: number }
 type HoraDetalle = { hora: string; cantidad: number | null; cumplimiento_hora: number | null; tiempo_improductivo: number | null; observacion: string | null }
@@ -108,6 +108,7 @@ export default function DashboardPage() {
   const [hasta, setHasta] = useState(hoy)
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [asistStats, setAsistStats] = useState<{ operarios_dia: number; total_operarios_sistema: number; pct: number } | null>(null)
   const [expandida, setExpandida] = useState<string | null>(null)
   const [filtroProceso, setFiltroProceso] = useState('')
   type SortField = 'proceso' | 'turno' | 'producto' | 'cumplimiento' | 'meta' | 'ejecutado'
@@ -127,9 +128,37 @@ export default function DashboardPage() {
   const cargar = useCallback(async () => {
     setLoading(true)
     const params = modo === 'dia' ? `desde=${fecha}&hasta=${fecha}` : `desde=${desde}&hasta=${hasta}`
-    const res = await fetch(`/api/dashboard?${params}`)
-    const json = await res.json()
+    const dashRes = await fetch(`/api/dashboard?${params}`)
+    const json = await dashRes.json()
     setData(json)
+
+    // Siempre traer datos de asistencia (día o rango)
+    if (modo === 'rango') {
+      const aRes = await fetch(`/api/asistencia/lista?fecha_inicio=${desde}&fecha_fin=${hasta}`)
+      if (aRes.ok) {
+        const aJson = await aRes.json()
+        const st = aJson.estadisticas ?? {}
+        setAsistStats({
+          operarios_dia:          st.promedio_operarios_dia ?? 0,
+          total_operarios_sistema: st.total_operarios_sistema ?? 0,
+          pct:                    st.pct_promedio ?? 0,
+        })
+      }
+    } else {
+      const aRes = await fetch(`/api/asistencia/lista?fecha=${fecha}`)
+      if (aRes.ok) {
+        const aJson = await aRes.json()
+        const regs = aJson.registros ?? []
+        const total = aJson.estadisticas?.total_operarios_sistema ?? 0
+        const count = regs.filter((r: { rol: string }) => r.rol === 'Operario').length
+        setAsistStats({
+          operarios_dia:          count,
+          total_operarios_sistema: total,
+          pct:                    total > 0 ? Math.round((count / total) * 100) : 0,
+        })
+      }
+    }
+
     setLoading(false)
   }, [modo, fecha, desde, hasta])
 
@@ -230,6 +259,31 @@ export default function DashboardPage() {
                 <p className="text-3xl font-black text-white leading-none">{kpis?.personal_planeado.toLocaleString()}</p>
                 <p className="text-gray-500 text-xs mt-1">operarios planeados</p>
               </div>
+
+              {/* Asistencia real vs planeado */}
+              {asistStats && (() => {
+                const planeado = kpis?.personal_planeado ?? 0
+                const pctVsPlaneado = planeado > 0 ? Math.min(100, Math.round((asistStats.operarios_dia / planeado) * 100)) : 0
+                return (
+                  <div className="rounded-lg p-2.5 flex flex-col gap-1" style={{ background: '#052e16', border: '1px solid #166534' }}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-emerald-700 text-[10px] font-bold uppercase tracking-wide">
+                        {modo === 'rango' ? 'Prom. asistencia/día' : 'Operarios asistieron'}
+                      </span>
+                      <span className="text-emerald-400 text-xs font-black">{pctVsPlaneado}%</span>
+                    </div>
+                    <div className="flex items-end gap-1.5">
+                      <span className="text-2xl font-black text-emerald-300 leading-none">{asistStats.operarios_dia}</span>
+                      <span className="text-emerald-700 text-xs mb-0.5">de {planeado} planeados</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-black/30 rounded-full">
+                      <div className="h-1.5 rounded-full transition-all"
+                        style={{ width: `${pctVsPlaneado}%`, background: pctVsPlaneado >= 80 ? '#22c55e' : pctVsPlaneado >= 60 ? '#eab308' : '#ef4444' }} />
+                    </div>
+                  </div>
+                )
+              })()}
+
               <div className="h-0.5 w-full bg-gray-800 rounded-full" />
             </div>
 
@@ -254,9 +308,42 @@ export default function DashboardPage() {
 
             {/* Por proceso — medidores */}
             <div className="bg-gray-900 border border-gray-800 rounded-2xl overflow-hidden">
-              <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between">
+              <div className="px-5 py-4 border-b border-gray-800 flex items-center justify-between flex-wrap gap-2">
                 <h2 className="text-white font-semibold">Resumen por proceso</h2>
-                <span className="text-gray-500 text-xs">{data.por_proceso.length} procesos</span>
+                <div className="flex items-center gap-3 flex-wrap">
+                  {/* Actividades adicionales manuales */}
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
+                    style={{ background: (kpis?.actividades_manuales ?? 0) > 0 ? 'rgba(59,130,246,0.1)' : '#111827', border: `1px solid ${(kpis?.actividades_manuales ?? 0) > 0 ? 'rgba(59,130,246,0.3)' : '#1f2937'}` }}>
+                    <span className="text-sm">✏️</span>
+                    <div>
+                      <p className="text-[10px] text-gray-500 uppercase tracking-wide leading-none">Actvs. adicionales</p>
+                      <p className="font-black text-sm leading-tight" style={{ color: (kpis?.actividades_manuales ?? 0) > 0 ? '#93c5fd' : '#4b5563' }}>
+                        {kpis?.actividades_manuales ?? 0} registradas
+                      </p>
+                    </div>
+                  </div>
+                  {/* Personal operario asistido */}
+                  {asistStats && (() => {
+                    const planeado = kpis?.personal_planeado ?? 0
+                    const pctVsPlaneado = planeado > 0 ? Math.min(100, Math.round((asistStats.operarios_dia / planeado) * 100)) : 0
+                    return (
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg"
+                        style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)' }}>
+                        <span className="text-sm">👷</span>
+                        <div>
+                          <p className="text-[10px] text-gray-500 uppercase tracking-wide leading-none">
+                            {modo === 'rango' ? 'Prom. operarios/día' : 'Operarios hoy'}
+                          </p>
+                          <p className="font-black text-sm leading-tight text-emerald-300">
+                            {asistStats.operarios_dia} <span className="text-emerald-700 font-normal">/ {planeado} planeados</span>
+                            <span className="text-emerald-500 text-xs ml-1">({pctVsPlaneado}%)</span>
+                          </p>
+                        </div>
+                      </div>
+                    )
+                  })()}
+                  <span className="text-gray-500 text-xs">{data.por_proceso.length} procesos</span>
+                </div>
               </div>
               <div className="grid grid-cols-4 sm:grid-cols-5 lg:grid-cols-4 xl:grid-cols-5 gap-1.5 p-2">
                 {data.por_proceso.map(row => (
@@ -267,21 +354,58 @@ export default function DashboardPage() {
 
             {/* Gráfica por día — solo si hay rango */}
             {data.por_dia.length > 1 && (
-              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5">
-                <h2 className="text-white font-semibold mb-4">Cumplimiento diario (%)</h2>
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={data.por_dia} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                    <XAxis dataKey="fecha" tick={{ fill: '#6b7280', fontSize: 10 }} />
-                    <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} domain={[0, 100]} />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: '#111827', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }}
-                      labelStyle={{ color: '#fff' }}
-                      formatter={(v) => [`${v}%`, 'Cumplimiento']}
+              <div className="bg-gray-900 border border-gray-800 rounded-2xl p-5 min-w-[260px]">
+                <div className="flex items-center justify-between mb-1">
+                  <h2 className="text-white font-semibold text-sm">Cumplimiento diario</h2>
+                  <span className="text-xs text-gray-600">{data.por_dia.length} días</span>
+                </div>
+                <div className="flex gap-3 mb-3">
+                  {[['≥80%','#10b981'],['60-79%','#f59e0b'],['<60%','#ef4444']].map(([l,c])=>(
+                    <span key={l} className="flex items-center gap-1 text-xs" style={{ color: '#6b7280' }}>
+                      <span className="w-2 h-2 rounded-sm inline-block" style={{ background: c }} />{l}
+                    </span>
+                  ))}
+                </div>
+                <ResponsiveContainer width="100%" height={240}>
+                  <BarChart data={data.por_dia} margin={{ top: 20, right: 8, left: -22, bottom: 4 }} barCategoryGap="20%">
+                    <XAxis
+                      dataKey="fecha"
+                      tick={{ fill: '#9ca3af', fontSize: 11, fontWeight: 600 }}
+                      tickLine={false}
+                      axisLine={{ stroke: '#374151' }}
+                      tickFormatter={(v: string) => v.split('-')[2]}
                     />
-                    <Bar dataKey="cumplimiento" radius={[4, 4, 0, 0]} maxBarSize={40}>
+                    <YAxis
+                      tick={{ fill: '#6b7280', fontSize: 10 }}
+                      tickLine={false}
+                      axisLine={false}
+                      domain={[0, 100]}
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      tickFormatter={(v: any) => `${v}%`}
+                    />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                      contentStyle={{ backgroundColor: '#111827', border: '1px solid #374151', borderRadius: 8, fontSize: 12 }}
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      labelFormatter={(v: any) => {
+                        const parts = String(v).split('-')
+                        return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : v
+                      }}
+                      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                      formatter={(v: any) => [`${v}%`, 'Cumplimiento']}
+                    />
+                    <ReferenceLine y={80} stroke="#10b981" strokeDasharray="4 3" strokeWidth={1} strokeOpacity={0.4} />
+                    <Bar dataKey="cumplimiento" radius={[5, 5, 0, 0]}>
                       {data.por_dia.map((entry, i) => (
-                        <Cell key={i} fill={entry.cumplimiento >= 90 ? '#10b981' : entry.cumplimiento >= 70 ? '#f59e0b' : '#ef4444'} />
+                        <Cell key={i} fill={entry.cumplimiento >= 80 ? '#10b981' : entry.cumplimiento >= 60 ? '#f59e0b' : '#ef4444'} />
                       ))}
+                      <LabelList
+                        dataKey="cumplimiento"
+                        position="insideTop"
+                        style={{ fill: '#fff', fontSize: 11, fontWeight: 900 }}
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        formatter={(v: any) => `${v}%`}
+                      />
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>

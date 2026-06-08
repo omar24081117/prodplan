@@ -1,11 +1,13 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { UserPlus, Trash2, KeyRound, RefreshCw, User, Mail, Lock } from 'lucide-react'
+import { UserPlus, Trash2, KeyRound, RefreshCw, User, Mail, Lock, LayoutDashboard } from 'lucide-react'
 
 type Usuario = {
   id: string
   email: string
+  nombre: string | null
+  panel_control: boolean
   created_at: string
   last_sign_in_at: string | null
 }
@@ -27,6 +29,9 @@ export default function UsuariosPage() {
   const [editId, setEditId] = useState<string | null>(null)
   const [newPass, setNewPass] = useState('')
   const [savingPass, setSavingPass] = useState(false)
+
+  // Toggle panel_control
+  const [togglingId, setTogglingId] = useState<string | null>(null)
 
   async function cargar() {
     setLoading(true)
@@ -110,6 +115,27 @@ export default function UsuariosPage() {
     }
   }
 
+  async function togglePanelControl(u: Usuario) {
+    setTogglingId(u.id)
+    try {
+      const res = await fetch(`/api/usuarios/${u.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ panel_control: !u.panel_control }),
+      })
+      if (res.ok) {
+        setUsuarios(prev => prev.map(x => x.id === u.id ? { ...x, panel_control: !u.panel_control } : x))
+      } else {
+        const d = await res.json()
+        alert(d.error || 'Error al actualizar')
+      }
+    } catch {
+      alert('Error de conexión')
+    } finally {
+      setTogglingId(null)
+    }
+  }
+
   function formatFecha(iso: string | null) {
     if (!iso) return '—'
     return new Date(iso).toLocaleString('es-CO', {
@@ -184,10 +210,17 @@ export default function UsuariosPage() {
 
       {/* Lista de usuarios */}
       <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid #3a6228' }}>
-        <div className="px-6 py-4" style={{ background: '#1e3a14' }}>
-          <h2 className="text-white font-semibold">Usuarios registrados</h2>
-          <p className="text-gray-400 text-xs mt-0.5">{usuarios.length} usuario{usuarios.length !== 1 ? 's' : ''}</p>
+        <div className="px-6 py-4 flex items-center justify-between" style={{ background: '#1e3a14' }}>
+          <div>
+            <h2 className="text-white font-semibold">Usuarios registrados</h2>
+            <p className="text-gray-400 text-xs mt-0.5">{usuarios.length} usuario{usuarios.length !== 1 ? 's' : ''}</p>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-purple-300/70">
+            <LayoutDashboard size={12} />
+            <span>Panel de Control</span>
+          </div>
         </div>
+
         {loading ? (
           <div className="px-6 py-8 text-center text-gray-400" style={{ background: '#162e10' }}>Cargando...</div>
         ) : error ? (
@@ -202,13 +235,31 @@ export default function UsuariosPage() {
               <div key={u.id}
                 className="px-6 py-4 flex flex-col sm:flex-row sm:items-center gap-3"
                 style={{ borderTop: i === 0 ? 'none' : '1px solid #2a4e20' }}>
+
+                {/* Info usuario */}
                 <div className="flex-1 min-w-0">
-                  <p className="text-white font-medium truncate">{u.email}</p>
+                  {u.nombre && <p className="text-white font-semibold text-sm">{u.nombre}</p>}
+                  <p className={`truncate ${u.nombre ? 'text-gray-400 text-xs' : 'text-white font-medium'}`}>{u.email}</p>
                   <p className="text-gray-500 text-xs mt-0.5">
                     Creado: {formatFecha(u.created_at)}
                     {u.last_sign_in_at && <> · Último acceso: {formatFecha(u.last_sign_in_at)}</>}
                   </p>
                 </div>
+
+                {/* Toggle Panel de Control */}
+                <button
+                  onClick={() => togglePanelControl(u)}
+                  disabled={togglingId === u.id}
+                  title={u.panel_control ? 'Revocar acceso al Panel de Control' : 'Dar acceso al Panel de Control'}
+                  className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-all disabled:opacity-50"
+                  style={{
+                    background: u.panel_control ? 'rgba(90,26,175,0.35)' : 'rgba(55,65,81,0.5)',
+                    border: `1px solid ${u.panel_control ? '#7a2ad0' : '#4b5563'}`,
+                    color: u.panel_control ? '#c084fc' : '#6b7280',
+                  }}>
+                  <LayoutDashboard size={12} />
+                  {togglingId === u.id ? '...' : u.panel_control ? 'Panel ✓' : 'Panel'}
+                </button>
 
                 {/* Cambiar contraseña */}
                 {editId === u.id ? (

@@ -1,13 +1,43 @@
 import Link from 'next/link'
+import { cookies } from 'next/headers'
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
-import { Leaf, LayoutDashboard, CalendarDays, Play, ClipboardCheck, BookOpen, Users, UserCog, Settings, LogOut, FlaskConical, AlertTriangle, TrendingUp } from 'lucide-react'
+import { Leaf, LayoutDashboard, CalendarDays, Play, ClipboardCheck, BookOpen, Users, UserCog, Settings, LogOut, FlaskConical, AlertTriangle, TrendingUp, Clock, Barcode } from 'lucide-react'
+
+const NAV_COMPLETO = [
+  { href: '/admin',                         icon: <LayoutDashboard size={14} />, label: 'Dashboard' },
+  { href: '/admin/planeacion',              icon: <CalendarDays size={14} />,    label: 'Planeación' },
+  { href: '/admin/ejecucion',               icon: <Play size={14} />,            label: 'Ejecución' },
+  { href: '/admin/actividades-adicionales', icon: <TrendingUp size={14} />,      label: 'Actividades' },
+  { href: '/admin/asistencia',              icon: <ClipboardCheck size={14} />,  label: 'Asistencia' },
+  { href: '/admin/catalogo',               icon: <BookOpen size={14} />,         label: 'Catálogo' },
+  { href: '/admin/base-procesos',           icon: <FlaskConical size={14} />,    label: 'Base Procesos' },
+  { href: '/admin/causales-paro',           icon: <AlertTriangle size={14} />,   label: 'Causales Paro' },
+  { href: '/admin/personal',               icon: <Users size={14} />,            label: 'Personal' },
+  { href: '/admin/usuarios',               icon: <UserCog size={14} />,          label: 'Usuarios' },
+  { href: '/admin/horas-extra',            icon: <Clock size={14} />,            label: 'Horas Extra' },
+  { href: '/admin/catalogo-ean',          icon: <Barcode size={14} />,          label: 'Catálogo EAN' },
+  { href: '/admin/config-drive',          icon: <Barcode size={14} />,          label: 'Config Drive' },
+]
+
+const NAV_PANEL = [
+  { href: '/admin/asistencia',   icon: <ClipboardCheck size={14} />, label: 'Asistencia' },
+  { href: '/admin/catalogo',     icon: <BookOpen size={14} />,       label: 'Catálogo' },
+  { href: '/admin/base-procesos',icon: <FlaskConical size={14} />,   label: 'Base Procesos' },
+  { href: '/admin/causales-paro',icon: <AlertTriangle size={14} />,  label: 'Causales Paro' },
+  { href: '/admin/personal',     icon: <Users size={14} />,          label: 'Personal' },
+  { href: '/admin/usuarios',     icon: <UserCog size={14} />,        label: 'Usuarios' },
+]
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
   if (!user) redirect('/?error=admin_required')
+
+  const cookieStore = await cookies()
+  const modo = cookieStore.get('prodplan_modo')?.value
+  const navItems = modo === 'panel' ? NAV_PANEL : NAV_COMPLETO
 
   async function logout() {
     'use server'
@@ -25,18 +55,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <span className="text-white font-bold text-lg tracking-wide">PRODPLAN</span>
           </Link>
           <div className="hidden sm:flex items-center gap-1 text-sm">
-            {[
-              { href: '/admin', icon: <LayoutDashboard size={14} />, label: 'Dashboard' },
-              { href: '/admin/planeacion', icon: <CalendarDays size={14} />, label: 'Planeación' },
-              { href: '/admin/ejecucion', icon: <Play size={14} />, label: 'Ejecución' },
-              { href: '/admin/actividades-adicionales', icon: <TrendingUp size={14} />, label: 'Actividades' },
-              { href: '/admin/asistencia', icon: <ClipboardCheck size={14} />, label: 'Asistencia' },
-              { href: '/admin/catalogo', icon: <BookOpen size={14} />, label: 'Catálogo' },
-              { href: '/admin/base-procesos', icon: <FlaskConical size={14} />, label: 'Base Procesos' },
-              { href: '/admin/causales-paro', icon: <AlertTriangle size={14} />, label: 'Causales Paro' },
-              { href: '/admin/personal', icon: <Users size={14} />, label: 'Personal' },
-              { href: '/admin/usuarios', icon: <UserCog size={14} />, label: 'Usuarios' },
-            ].map(item => (
+            {navItems.map(item => (
               <Link
                 key={item.href}
                 href={item.href}

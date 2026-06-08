@@ -5,7 +5,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const { id } = await params
   const body = await request.json()
   const supabase = await createClient()
-  const { data, error } = await supabase.from('personal').update(body).eq('id', id).select().single()
+
+  const { data, error } = await supabase
+    .from('personal')
+    .update(body)
+    .eq('id', id)
+    .select()
+    .single()
+
   if (error) return NextResponse.json({ error: error.message }, { status: 400 })
   return NextResponse.json(data)
 }

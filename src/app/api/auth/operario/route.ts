@@ -10,9 +10,11 @@ export async function POST(request: NextRequest) {
 
   const supabase = await createClient()
 
+  const ROLES_PERMITIDOS = ['Operario', 'Supervisor', 'Analista', 'Director', 'Gerencia']
+
   const { data: operario, error } = await supabase
     .from('personal')
-    .select('cedula, nombre')
+    .select('cedula, nombre, rol')
     .eq('cedula', cedula.trim())
     .eq('activo', true)
     .single()
@@ -21,19 +23,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Cédula no registrada o inactiva' }, { status: 401 })
   }
 
-  // Verificar si ya registró salida hoy
+  const rol = operario.rol ?? 'Operario'
+  if (!ROLES_PERMITIDOS.includes(rol)) {
+    return NextResponse.json({
+      error: `Tu rol (${rol}) no tiene acceso a este módulo.`,
+    }, { status: 403 })
+  }
+
+  // Verificar asistencia activa hoy (entrada registrada, sin salida)
   const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
   const { data: asistencia } = await supabase
     .from('asistencia')
-    .select('hora_salida')
+    .select('hora_ingreso, hora_salida')
     .eq('cedula', cedula.trim())
     .eq('fecha', hoy)
-    .not('hora_salida', 'is', null)
     .maybeSingle()
 
-  if (asistencia?.hora_salida) {
+  if (!asistencia) {
     return NextResponse.json({
-      error: `Ya registraste salida a las ${asistencia.hora_salida}. No puedes ingresar nuevamente hoy.`,
+      error: 'Debes registrar tu asistencia (entrada) antes de ejecutar tareas.',
+    }, { status: 403 })
+  }
+
+  if (asistencia.hora_salida) {
+    return NextResponse.json({
+      error: `Ya registraste salida a las ${asistencia.hora_salida}. No puedes ejecutar tareas.`,
     }, { status: 403 })
   }
 

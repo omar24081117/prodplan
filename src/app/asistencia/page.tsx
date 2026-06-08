@@ -8,7 +8,7 @@ type Resultado = {
   nombre: string; hora: string; tipo: 'entrada' | 'salida'; turno?: string
 } | null
 
-type Resumen = { total: number }
+type Resumen = { total: number; operarios: number; otros: number }
 
 export default function AsistenciaPage() {
   const [cedula, setCedula] = useState('')
@@ -105,13 +105,39 @@ export default function AsistenciaPage() {
 
       {/* Resumen */}
       {resumen && (
-        <div className="relative z-10 w-full max-w-sm rounded-2xl p-4 text-center"
-          style={{ background: '#1e3a14', border: '1px solid #3a6228' }}>
-          <div className="flex items-center justify-center gap-2 text-sm mb-1" style={{ color: '#8aaa78' }}>
-            <Users size={14} /><span>Personal en planta hoy</span>
+        <div className="relative z-10 w-full max-w-sm flex flex-col gap-3">
+          {/* Total */}
+          <div className="rounded-2xl p-4 text-center"
+            style={{ background: '#1e3a14', border: '1px solid #3a6228' }}>
+            <div className="flex items-center justify-center gap-2 text-sm mb-1" style={{ color: '#8aaa78' }}>
+              <Users size={14} /><span>Personal en planta ahora</span>
+            </div>
+            <p className="text-white text-3xl font-bold mt-1">{resumen.total}</p>
+            <p className="text-xs mt-1" style={{ color: '#6a8a58' }}>personas activas (sin salida)</p>
           </div>
-          <p className="text-white text-3xl font-bold mt-1">{resumen.total}</p>
-          <p className="text-xs mt-1" style={{ color: '#6a8a58' }}>personas con entrada registrada</p>
+
+          {/* Dos contadores */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* Operarios */}
+            <div className="rounded-2xl p-4 text-center"
+              style={{ background: '#162e10', border: '1px solid #2e5a20' }}>
+              <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: '#6aaa50' }}>
+                Operarios
+              </p>
+              <p className="text-white text-4xl font-bold">{resumen.operarios}</p>
+              <p className="text-xs mt-1" style={{ color: '#4a7a38' }}>en planta</p>
+            </div>
+
+            {/* Otros cargos */}
+            <div className="rounded-2xl p-4 text-center"
+              style={{ background: '#1e2e10', border: '1px solid #3a5228' }}>
+              <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: '#9aaa60' }}>
+                Otros cargos
+              </p>
+              <p className="text-white text-4xl font-bold">{resumen.otros}</p>
+              <p className="text-xs mt-1" style={{ color: '#5a7a40' }}>en planta</p>
+            </div>
+          </div>
         </div>
       )}
 

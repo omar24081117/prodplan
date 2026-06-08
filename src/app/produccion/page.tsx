@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { HardHat, ShieldCheck, Briefcase, ArrowLeft } from 'lucide-react'
+import { HardHat, ShieldCheck, Briefcase, ArrowLeft, Clock } from 'lucide-react'
 import LeafBackground from '@/components/LeafBackground'
 
 export default function ProduccionPage() {
@@ -137,6 +137,22 @@ export default function ProduccionPage() {
             {loadingOp ? 'Verificando...' : 'Entrar a producción →'}
           </button>
         </form>
+      </div>
+
+      {/* Card Mis Horas Extra */}
+      <div className="relative z-10 w-full max-w-sm rounded-2xl p-5 cursor-pointer hover:brightness-110 transition-all"
+        style={{ background: '#1e3a14', border: '1px solid #3a6228', boxShadow: '0 8px 32px rgba(20,60,10,0.35)' }}
+        onClick={() => router.push('/produccion/mis-horas')}>
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg" style={{ background: 'rgba(180,80,0,0.2)' }}>
+            <Clock size={28} strokeWidth={1.5} className="text-yellow-400" />
+          </div>
+          <div>
+            <h2 className="text-white font-bold text-lg">Mis Horas Extra</h2>
+            <p className="text-gray-400 text-xs">Consulta tu reporte de tiempo adicional</p>
+          </div>
+          <span className="ml-auto text-gray-500 text-xl">→</span>
+        </div>
       </div>
 
       {/* Card Personal Administrativo */}
