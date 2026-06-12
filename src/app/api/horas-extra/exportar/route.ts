@@ -84,16 +84,19 @@ export async function GET(request: NextRequest) {
 
   const supabase = await createClient()
 
-  // Solo operarios activos
-  const { data: operarios } = await supabase
+  // Operarios y Supervisores activos
+  const { data: personalValido } = await supabase
     .from('personal')
-    .select('cedula')
-    .eq('rol', 'Operario')
+    .select('cedula, rol')
+    .in('rol', ['Operario', 'Supervisor'])
     .eq('activo', true)
 
-  const cedulasOperarios = (operarios ?? []).map((o: { cedula: string }) => o.cedula)
+  const cedulasOperarios = (personalValido ?? []).map((o: { cedula: string }) => o.cedula)
+  const rolMapExport: Record<string, string> = {}
+  for (const p of personalValido ?? []) rolMapExport[p.cedula] = (p as { cedula: string; rol: string }).rol
+
   if (cedulasOperarios.length === 0) {
-    return NextResponse.json({ error: 'Sin operarios' }, { status: 404 })
+    return NextResponse.json({ error: 'Sin personal activo' }, { status: 404 })
   }
 
   // Asistencias del rango
@@ -145,6 +148,7 @@ export async function GET(request: NextRequest) {
     FECHA: string
     NOMBRE: string
     'CÉDULA': string
+    ROL: string
     TRN: string
     'ENT.': string
     'E.N.': string
@@ -184,6 +188,7 @@ export async function GET(request: NextRequest) {
       FECHA:          fmtFecha(a.fecha),
       NOMBRE:         a.nombre,
       'CÉDULA':       a.cedula,
+      ROL:            rolMapExport[a.cedula] ?? '—',
       TRN:            turno,
       'ENT.':         horaIngreso ?? '—',
       'E.N.':         entradaNorm,
@@ -210,6 +215,7 @@ export async function GET(request: NextRequest) {
     { wch: 14 }, // FECHA
     { wch: 28 }, // NOMBRE
     { wch: 14 }, // CÉDULA
+    { wch: 12 }, // ROL
     { wch: 6  }, // TRN
     { wch: 8  }, // ENT.
     { wch: 8  }, // E.N.

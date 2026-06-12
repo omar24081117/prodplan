@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
-const ROLES_APROBADORES = ['Supervisor', 'Analista', 'Director']
+const ROLES_APROBADORES = ['Supervisor', 'supervisor', 'Analista', 'Director']
 
 export async function POST(request: NextRequest) {
   const { cedula_empleado, fecha, cedula_aprobador } = await request.json()

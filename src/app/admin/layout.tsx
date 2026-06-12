@@ -17,7 +17,6 @@ const NAV_COMPLETO = [
   { href: '/admin/usuarios',               icon: <UserCog size={14} />,          label: 'Usuarios' },
   { href: '/admin/horas-extra',            icon: <Clock size={14} />,            label: 'Horas Extra' },
   { href: '/admin/catalogo-ean',          icon: <Barcode size={14} />,          label: 'Catálogo EAN' },
-  { href: '/admin/config-drive',          icon: <Barcode size={14} />,          label: 'Config Drive' },
 ]
 
 const NAV_PANEL = [

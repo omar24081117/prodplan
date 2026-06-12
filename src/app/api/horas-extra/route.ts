@@ -10,12 +10,13 @@ const toMins = (t: string) => {
 export type RegistroHE = {
   cedula: string
   nombre: string
+  rol: string | null
   hora_ingreso: string | null
   hora_salida: string | null
   turno: 'T1' | 'T2' | null
   entrada_norm: string | null
   salida_norm: string | null
-  salida_efectiva: string | null   // normalizada según margen de turno
+  salida_efectiva: string | null
   minutos_extra: number
   horas_extra: number
   horas_recargo: number
@@ -34,21 +35,29 @@ export async function GET(request: NextRequest) {
 
   const supabase = await createClient()
 
-  const { data: operarios } = await supabase
+  // Roles que participan en horas extra
+  const ROLES_VALIDOS = ['Operario', 'Supervisor']
+
+  // Mapa de rol por cédula (solo roles válidos)
+  const { data: personal } = await supabase
     .from('personal')
-    .select('cedula')
-    .eq('rol', 'Operario')
+    .select('cedula, rol')
+    .in('rol', ROLES_VALIDOS)
     .eq('activo', true)
 
-  const cedulasOperarios = (operarios ?? []).map(o => o.cedula)
-  if (cedulasOperarios.length === 0) return NextResponse.json({ fecha, registros: [] })
+  const rolMap: Record<string, string> = {}
+  const cedulasValidas = new Set<string>()
+  for (const p of personal ?? []) {
+    rolMap[p.cedula] = p.rol
+    cedulasValidas.add(p.cedula)
+  }
 
   const { data: asistencias, error } = await supabase
     .from('asistencia')
     .select('cedula, nombre, hora_ingreso, hora_salida')
     .eq('fecha', fecha)
     .not('hora_ingreso', 'is', null)
-    .in('cedula', cedulasOperarios)
+    .in('cedula', [...cedulasValidas])
     .order('nombre', { ascending: true })
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -124,6 +133,7 @@ export async function GET(request: NextRequest) {
     return {
       cedula: a.cedula,
       nombre: a.nombre,
+      rol: rolMap[a.cedula] ?? null,
       hora_ingreso: a.hora_ingreso,
       hora_salida: a.hora_salida,
       turno,

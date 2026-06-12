@@ -6,6 +6,7 @@ import { Clock, CheckCircle2, Loader2, AlertTriangle, X, Settings, XCircle, Down
 type Registro = {
   cedula: string
   nombre: string
+  rol: string | null
   hora_ingreso: string | null
   hora_salida: string | null
   turno: 'T1' | 'T2' | null
@@ -377,6 +378,7 @@ export default function HorasExtraPage() {
   const [overrides, setOverrides]     = useState<Record<string, Override>>({})
   const [exportando, setExportando]   = useState(false)
   const [modalExport, setModalExport] = useState(false)
+  const [filtroRol, setFiltroRol]     = useState<'todos' | 'Operario' | 'Supervisor'>('todos')
   const hoyExport = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
   const [expDesde, setExpDesde]       = useState(hoyExport.slice(0, 7) + '-01')
   const [expHasta, setExpHasta]       = useState(hoyExport)
@@ -459,6 +461,11 @@ export default function HorasExtraPage() {
     return { ...r, hora_ingreso: ov.hora_ingreso, salida_efectiva: ov.salida_efectiva, ...calc }
   })
 
+  // Filtro por rol
+  const registrosFiltrados = filtroRol === 'todos'
+    ? registrosEfectivos
+    : registrosEfectivos.filter(r => r.rol === filtroRol)
+
   // KPIs
   const conExtra      = registrosEfectivos.filter(r => r.minutos_extra > 0)
   const conRecargo    = registrosEfectivos.filter(r => r.horas_recargo > 0)
@@ -519,6 +526,29 @@ export default function HorasExtraPage() {
         </span>
       </div>
 
+      {/* Filtro por rol */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        {(['todos', 'Operario', 'Supervisor'] as const).map(r => {
+          const count = r === 'todos'
+            ? registrosEfectivos.length
+            : registrosEfectivos.filter(x => x.rol === r).length
+          return (
+            <button key={r} onClick={() => setFiltroRol(r)}
+              className="text-xs px-3 py-1.5 rounded-lg font-semibold transition-all"
+              style={{
+                background: filtroRol === r
+                  ? r === 'Supervisor' ? '#7c3aed' : r === 'Operario' ? '#0369a1' : '#374151'
+                  : '#1f2937',
+                border: `1px solid ${filtroRol === r ? (r === 'Supervisor' ? '#a78bfa' : r === 'Operario' ? '#38bdf8' : '#6b7280') : '#374151'}`,
+                color: filtroRol === r ? 'white' : '#6b7280',
+              }}>
+              {r === 'todos' ? 'Todos' : r} ({count})
+            </button>
+          )
+        })}
+        <span className="text-xs text-gray-600 ml-1">{registrosFiltrados.length} registros</span>
+      </div>
+
       {/* Tabla */}
       {loading ? (
         <div className="flex items-center justify-center py-20">
@@ -531,7 +561,6 @@ export default function HorasExtraPage() {
         </div>
       ) : (
         <div className="relative">
-          <p className="text-xs text-gray-600 mb-2">{registrosEfectivos.length} registros</p>
         <div ref={tablaRef} className="tabla-scroll rounded-xl overflow-x-auto" style={{ border: '1px solid #1e293b', background: '#0d1117' }}>
           <table className="w-full text-xs">
             <thead>
@@ -550,7 +579,7 @@ export default function HorasExtraPage() {
               </tr>
             </thead>
             <tbody>
-              {registrosEfectivos.map((r, i) => {
+              {registrosFiltrados.map((r, i) => {
                 const tieneExtra = r.minutos_extra > 0
                 const rowBg = r.aprobado
                   ? '#0a1f10'
@@ -564,6 +593,12 @@ export default function HorasExtraPage() {
                     {/* NOMBRE */}
                     <td className="px-2 py-2 text-white font-medium max-w-0">
                       <span className="block truncate" title={r.nombre}>{r.nombre}</span>
+                      {r.rol === 'Supervisor' && (
+                        <span className="text-[9px] font-bold px-1 py-0.5 rounded"
+                          style={{ background: 'rgba(124,58,237,0.25)', color: '#c4b5fd' }}>
+                          SUPERVISOR
+                        </span>
+                      )}
                     </td>
 
                     {/* CÉDULA */}

@@ -24,7 +24,7 @@ export async function GET(request: NextRequest) {
     .single()
 
   if (empError || !empleado) return NextResponse.json({ error: 'Cédula no encontrada o empleado inactivo' }, { status: 404 })
-  if (empleado.rol !== 'Operario') return NextResponse.json({ error: 'Solo operarios pueden consultar este reporte' }, { status: 403 })
+  if (!['Operario', 'Supervisor', 'supervisor'].includes(empleado.rol)) return NextResponse.json({ error: 'Solo operarios y supervisores pueden consultar este reporte' }, { status: 403 })
 
   const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
   const fechaInicio = searchParams.get('fecha_inicio') ?? (mes ? `${mes}-01` : hoy.slice(0, 7) + '-01')
@@ -113,8 +113,9 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // Cálculo normal (lógica original intacta)
-      const inMins = toMins(a.hora_ingreso ?? '')
+      // Cálculo normal — usar override de hora_ingreso/salida_efectiva si existe
+      const horaIngresoEfec = ov?.hora_ingreso    || a.hora_ingreso
+      const inMins = toMins(horaIngresoEfec ?? '')
       let turno: 'T1' | 'T2' | null = null
       let salidaNorm: string | null = null
       let salidaNormMins = -1
@@ -122,8 +123,11 @@ export async function GET(request: NextRequest) {
       if (inMins >= 300 && inMins <= 450)  { turno = 'T1'; salidaNorm = '15:30'; salidaNormMins = 15*60+30 }
       else if (inMins >= 720 && inMins <= 900) { turno = 'T2'; salidaNorm = '22:30'; salidaNormMins = 22*60+30 }
 
-      let salidaEfectiva: string | null = null
-      if (a.hora_salida && turno) {
+      // Si hay override de salida_efectiva del admin, usarlo directo (es el valor aprobado)
+      let salidaEfectiva: string | null = ov?.salida_efectiva || null
+
+      // Si no hay override, calcular desde hora_salida raw
+      if (!salidaEfectiva && a.hora_salida && turno) {
         const outMins = toMins(a.hora_salida)
         if (turno === 'T1') salidaEfectiva = (outMins >= 900 && outMins <= 950) ? '15:30' : a.hora_salida
         else if (turno === 'T2') salidaEfectiva = (outMins >= 1335 && outMins <= 1370) ? '22:30' : a.hora_salida
@@ -143,7 +147,7 @@ export async function GET(request: NextRequest) {
       return {
         fecha:                a.fecha,
         turno,
-        hora_ingreso:         a.hora_ingreso,
+        hora_ingreso:         horaIngresoEfec,
         hora_salida:          a.hora_salida,
         salida_norm:          salidaNorm,
         salida_efectiva:      salidaEfectiva,

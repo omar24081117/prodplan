@@ -259,6 +259,15 @@ export default function DespachosPage() {
   const [busqueda, setBusqueda]         = useState('')
   const [filtroOC, setFiltroOC]         = useState('')
   const [filtroDoc, setFiltroDoc]       = useState('')
+  const [filtroCliente, setFiltroCliente]         = useState('')
+  const [filtroFechaSubida, setFiltroFechaSubida] = useState('')
+  const [filtroFechaMax, setFiltroFechaMax]       = useState('')
+  const [filtroFechaDesp, setFiltroFechaDesp]     = useState('')
+  const [filtroFactura, setFiltroFactura]         = useState('')
+  const [filtroEntrega, setFiltroEntrega]         = useState('')
+  const [filtroAlistado, setFiltroAlistado]       = useState('')
+  const [filtroGuia, setFiltroGuia]               = useState('')
+  const [filtroProveedor, setFiltroProveedor]     = useState('')
 
   // Add form
   const [form, setForm] = useState({
@@ -289,6 +298,8 @@ export default function DespachosPage() {
 
   // Drag-to-scroll con mouse
   function onDragStart(e: React.MouseEvent<HTMLDivElement>) {
+    const t = e.target as HTMLElement
+    if (['INPUT','SELECT','TEXTAREA','BUTTON'].includes(t.tagName)) return
     dragging.current = true
     dragStartX.current = e.clientX
     dragScroll.current = tableRef.current?.scrollLeft ?? 0
@@ -500,22 +511,40 @@ export default function DespachosPage() {
 
   const lineas = Array.from(new Set(pedidos.map(p => p.linea).filter(Boolean))) as string[]
 
-  const filtrados = pedidos.filter(p => {
-    const estado = getEstado(p)
-    if (filtroEstado && estado !== filtroEstado) return false
-    if (filtroLinea && p.linea !== filtroLinea) return false
-    if (filtroEnvio && p.tipo_envio !== filtroEnvio) return false
-    if (filtroOC && !(p.oc ?? '').toLowerCase().includes(filtroOC.toLowerCase())) return false
-    if (filtroDoc && !(p.documento ?? '').toLowerCase().includes(filtroDoc.toLowerCase())) return false
-    if (busqueda) {
-      const q = busqueda.toLowerCase()
-      const match = p.cliente.toLowerCase().includes(q) ||
-        (p.oc ?? '').toLowerCase().includes(q) ||
-        (p.documento ?? '').toLowerCase().includes(q)
-      if (!match) return false
-    }
-    return true
-  })
+  const estadoOrder: Record<string, number> = { VENCIDO: 0, PENDIENTE: 1, DESPACHADO: 2 }
+
+  const filtrados = pedidos
+    .filter(p => {
+      const estado = getEstado(p)
+      if (filtroEstado && estado !== filtroEstado) return false
+      if (filtroLinea && p.linea !== filtroLinea) return false
+      if (filtroEnvio && p.tipo_envio !== filtroEnvio) return false
+      if (filtroOC && !(p.oc ?? '').toLowerCase().includes(filtroOC.toLowerCase())) return false
+      if (filtroDoc && !(p.documento ?? '').toLowerCase().includes(filtroDoc.toLowerCase())) return false
+      if (filtroCliente && !p.cliente.toLowerCase().includes(filtroCliente.toLowerCase())) return false
+      if (filtroFechaSubida && !fmtDate(p.fecha_subida).toLowerCase().includes(filtroFechaSubida.toLowerCase())) return false
+      if (filtroFechaMax && !fmtDate(p.fecha_max_entrega).toLowerCase().includes(filtroFechaMax.toLowerCase())) return false
+      if (filtroFechaDesp && !fmtDate(p.fecha_despacho).toLowerCase().includes(filtroFechaDesp.toLowerCase())) return false
+      if (filtroFactura && !(p.factura ?? '').toLowerCase().includes(filtroFactura.toLowerCase())) return false
+      if (filtroEntrega && p.entrega_tipo !== filtroEntrega) return false
+      if (filtroAlistado && !(p.alistado_por ?? '').toLowerCase().includes(filtroAlistado.toLowerCase())) return false
+      if (filtroGuia && !(p.guia ?? '').toLowerCase().includes(filtroGuia.toLowerCase())) return false
+      if (filtroProveedor && !(p.proveedor_despacho ?? '').toLowerCase().includes(filtroProveedor.toLowerCase())) return false
+      if (busqueda) {
+        const q = busqueda.toLowerCase()
+        const match = p.cliente.toLowerCase().includes(q) ||
+          (p.oc ?? '').toLowerCase().includes(q) ||
+          (p.documento ?? '').toLowerCase().includes(q)
+        if (!match) return false
+      }
+      return true
+    })
+    .sort((a, b) => {
+      const eA = getEstado(a), eB = getEstado(b)
+      const oA = estadoOrder[eA] ?? 99, oB = estadoOrder[eB] ?? 99
+      if (oA !== oB) return oA - oB
+      return (a.fecha_max_entrega ?? '').localeCompare(b.fecha_max_entrega ?? '')
+    })
 
   /* ── Render ───────────────────────────────────────────────────────────── */
 
@@ -857,6 +886,23 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
               </button>
             )}
           </div>
+
+          {/* Limpiar todos los filtros */}
+          {(filtroEstado || filtroLinea || filtroEnvio || filtroOC || filtroDoc || busqueda ||
+            filtroCliente || filtroFechaSubida || filtroFechaMax || filtroFechaDesp ||
+            filtroFactura || filtroEntrega || filtroAlistado || filtroGuia || filtroProveedor) && (
+            <button
+              onClick={() => {
+                setFiltroEstado(''); setFiltroLinea(''); setFiltroEnvio('')
+                setFiltroOC(''); setFiltroDoc(''); setBusqueda('')
+                setFiltroCliente(''); setFiltroFechaSubida(''); setFiltroFechaMax(''); setFiltroFechaDesp('')
+                setFiltroFactura(''); setFiltroEntrega(''); setFiltroAlistado(''); setFiltroGuia(''); setFiltroProveedor('')
+              }}
+              className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg transition-colors hover:brightness-125"
+              style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}>
+              <X size={11} /> Limpiar filtros
+            </button>
+          )}
         </div>
 
         {/* ── Table ── */}
@@ -889,12 +935,117 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
             onMouseLeave={onDragEnd}>
             <table className="w-full text-xs min-w-[1200px]">
               <thead>
-                <tr style={{ background: '#0a1828', borderBottom: '1px solid #1a4060' }}>
+                <tr style={{ background: '#0a1828', borderBottom: '1px solid #132030' }}>
                   {['ESTADO','LÍNEA','TIPO ENVÍO','CLIENTE','OC','DOC','F. SUBIDA','F. MÁX.','F. DESPACHO','FACTURA','ENTREGA','ALISTADO POR','GUÍA','PROVEEDOR','OBSERVACIONES',''].map(h => (
                     <th key={h} className="px-3 py-2 text-left text-gray-500 font-semibold uppercase tracking-wide whitespace-nowrap">
                       {h}
                     </th>
                   ))}
+                </tr>
+                {/* ── Filter row ── */}
+                <tr style={{ background: '#07111e', borderBottom: '1px solid #1a4060' }}>
+                  {/* ESTADO */}
+                  <th className="px-2 py-1.5">
+                    <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value as typeof filtroEstado)}
+                      className="w-full text-xs rounded px-1 py-0.5 focus:outline-none cursor-pointer"
+                      style={{ background: '#0d1e30', border: '1px solid #1a3050', color: filtroEstado ? '#facc15' : '#4b6a8a', minWidth: 80 }}>
+                      <option value="">Todos</option>
+                      <option value="VENCIDO">VENCIDO</option>
+                      <option value="PENDIENTE">PENDIENTE</option>
+                      <option value="DESPACHADO">DESPACHADO</option>
+                    </select>
+                  </th>
+                  {/* LÍNEA */}
+                  <th className="px-2 py-1.5">
+                    <select value={filtroLinea} onChange={e => setFiltroLinea(e.target.value)}
+                      className="w-full text-xs rounded px-1 py-0.5 focus:outline-none cursor-pointer"
+                      style={{ background: '#0d1e30', border: '1px solid #1a3050', color: filtroLinea ? '#60a5fa' : '#4b6a8a', minWidth: 90 }}>
+                      <option value="">Todas</option>
+                      {LINEAS.map(l => <option key={l} value={l}>{l}</option>)}
+                    </select>
+                  </th>
+                  {/* TIPO ENVÍO */}
+                  <th className="px-2 py-1.5">
+                    <select value={filtroEnvio} onChange={e => setFiltroEnvio(e.target.value)}
+                      className="w-full text-xs rounded px-1 py-0.5 focus:outline-none cursor-pointer"
+                      style={{ background: '#0d1e30', border: '1px solid #1a3050', color: filtroEnvio ? '#60a5fa' : '#4b6a8a', minWidth: 70 }}>
+                      <option value="">Todos</option>
+                      <option value="Normal">Normal</option>
+                      <option value="Premium">Premium</option>
+                    </select>
+                  </th>
+                  {/* CLIENTE */}
+                  <th className="px-2 py-1.5">
+                    <input type="text" value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)}
+                      placeholder="Filtrar…" className="w-full text-xs rounded px-1 py-0.5 focus:outline-none"
+                      style={{ background: '#0d1e30', border: `1px solid ${filtroCliente ? '#3a7abf' : '#1a3050'}`, color: '#e2e8f0', minWidth: 100 }} />
+                  </th>
+                  {/* OC */}
+                  <th className="px-2 py-1.5">
+                    <input type="text" value={filtroOC} onChange={e => setFiltroOC(e.target.value)}
+                      placeholder="Filtrar…" className="w-full text-xs rounded px-1 py-0.5 focus:outline-none"
+                      style={{ background: '#0d1e30', border: `1px solid ${filtroOC ? '#3a7abf' : '#1a3050'}`, color: '#e2e8f0', minWidth: 70 }} />
+                  </th>
+                  {/* DOC */}
+                  <th className="px-2 py-1.5">
+                    <input type="text" value={filtroDoc} onChange={e => setFiltroDoc(e.target.value)}
+                      placeholder="Filtrar…" className="w-full text-xs rounded px-1 py-0.5 focus:outline-none"
+                      style={{ background: '#0d1e30', border: `1px solid ${filtroDoc ? '#3a7abf' : '#1a3050'}`, color: '#e2e8f0', minWidth: 70 }} />
+                  </th>
+                  {/* F. SUBIDA */}
+                  <th className="px-2 py-1.5">
+                    <input type="text" value={filtroFechaSubida} onChange={e => setFiltroFechaSubida(e.target.value)}
+                      placeholder="dd/mm" className="w-full text-xs rounded px-1 py-0.5 focus:outline-none"
+                      style={{ background: '#0d1e30', border: `1px solid ${filtroFechaSubida ? '#3a7abf' : '#1a3050'}`, color: '#e2e8f0', minWidth: 60 }} />
+                  </th>
+                  {/* F. MÁX. */}
+                  <th className="px-2 py-1.5">
+                    <input type="text" value={filtroFechaMax} onChange={e => setFiltroFechaMax(e.target.value)}
+                      placeholder="dd/mm" className="w-full text-xs rounded px-1 py-0.5 focus:outline-none"
+                      style={{ background: '#0d1e30', border: `1px solid ${filtroFechaMax ? '#3a7abf' : '#1a3050'}`, color: '#e2e8f0', minWidth: 60 }} />
+                  </th>
+                  {/* F. DESPACHO */}
+                  <th className="px-2 py-1.5">
+                    <input type="text" value={filtroFechaDesp} onChange={e => setFiltroFechaDesp(e.target.value)}
+                      placeholder="dd/mm" className="w-full text-xs rounded px-1 py-0.5 focus:outline-none"
+                      style={{ background: '#0d1e30', border: `1px solid ${filtroFechaDesp ? '#3a7abf' : '#1a3050'}`, color: '#e2e8f0', minWidth: 60 }} />
+                  </th>
+                  {/* FACTURA */}
+                  <th className="px-2 py-1.5">
+                    <input type="text" value={filtroFactura} onChange={e => setFiltroFactura(e.target.value)}
+                      placeholder="Filtrar…" className="w-full text-xs rounded px-1 py-0.5 focus:outline-none"
+                      style={{ background: '#0d1e30', border: `1px solid ${filtroFactura ? '#3a7abf' : '#1a3050'}`, color: '#e2e8f0', minWidth: 70 }} />
+                  </th>
+                  {/* ENTREGA */}
+                  <th className="px-2 py-1.5">
+                    <select value={filtroEntrega} onChange={e => setFiltroEntrega(e.target.value)}
+                      className="w-full text-xs rounded px-1 py-0.5 focus:outline-none cursor-pointer"
+                      style={{ background: '#0d1e30', border: '1px solid #1a3050', color: filtroEntrega ? '#60a5fa' : '#4b6a8a', minWidth: 70 }}>
+                      <option value="">Todos</option>
+                      <option value="PARCIAL">PARCIAL</option>
+                      <option value="COMPLETA">COMPLETA</option>
+                    </select>
+                  </th>
+                  {/* ALISTADO POR */}
+                  <th className="px-2 py-1.5">
+                    <input type="text" value={filtroAlistado} onChange={e => setFiltroAlistado(e.target.value)}
+                      placeholder="Filtrar…" className="w-full text-xs rounded px-1 py-0.5 focus:outline-none"
+                      style={{ background: '#0d1e30', border: `1px solid ${filtroAlistado ? '#3a7abf' : '#1a3050'}`, color: '#e2e8f0', minWidth: 80 }} />
+                  </th>
+                  {/* GUÍA */}
+                  <th className="px-2 py-1.5">
+                    <input type="text" value={filtroGuia} onChange={e => setFiltroGuia(e.target.value)}
+                      placeholder="Filtrar…" className="w-full text-xs rounded px-1 py-0.5 focus:outline-none"
+                      style={{ background: '#0d1e30', border: `1px solid ${filtroGuia ? '#3a7abf' : '#1a3050'}`, color: '#e2e8f0', minWidth: 70 }} />
+                  </th>
+                  {/* PROVEEDOR */}
+                  <th className="px-2 py-1.5">
+                    <input type="text" value={filtroProveedor} onChange={e => setFiltroProveedor(e.target.value)}
+                      placeholder="Filtrar…" className="w-full text-xs rounded px-1 py-0.5 focus:outline-none"
+                      style={{ background: '#0d1e30', border: `1px solid ${filtroProveedor ? '#3a7abf' : '#1a3050'}`, color: '#e2e8f0', minWidth: 80 }} />
+                  </th>
+                  {/* OBSERVACIONES */}
+                  <th className="px-2 py-1.5" colSpan={2} />
                 </tr>
               </thead>
               <tbody>
