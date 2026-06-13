@@ -1,7 +1,23 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Clock, CheckCircle2, Loader2, AlertTriangle, X, Settings, XCircle, Download, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Clock, CheckCircle2, Loader2, AlertTriangle, X, Settings, XCircle, Download, UserX, FileBarChart2 } from 'lucide-react'
+
+const TIPOS_AUSENTISMO = [
+  'Sin Justa Causa',
+  'Permiso Remunerado',
+  'Permiso No Remunerado',
+  'Calamidad',
+  'Incapacidad',
+  'Día de la Familia',
+  'Vacaciones',
+  'Licencia de Maternidad',
+  'Licencia de Paternidad',
+] as const
+type TipoAusentismo = typeof TIPOS_AUSENTISMO[number]
+
+type PersonalFijo = { id: string; cedula: string; nombre: string; rol: string }
+type Ausentismo   = { cedula: string; nombre: string; tipo: TipoAusentismo }
 
 type Registro = {
   cedula: string
@@ -384,6 +400,11 @@ export default function HorasExtraPage() {
   const [expHasta, setExpHasta]       = useState(hoyExport)
   const tablaRef = useRef<HTMLDivElement>(null)
 
+  // ── Ausentes ──────────────────────────────────────────────────────────────
+  const [personalFijo, setPersonalFijo]       = useState<PersonalFijo[]>([])
+  const [ausentismos, setAusentismos]         = useState<Record<string, TipoAusentismo>>({})
+  const [guardandoAus, setGuardandoAus]       = useState<string | null>(null)
+
   function scrollTabla(dir: 'left' | 'right') {
     if (!tablaRef.current) return
     tablaRef.current.scrollBy({ left: dir === 'right' ? 300 : -300, behavior: 'smooth' })
@@ -393,13 +414,17 @@ export default function HorasExtraPage() {
     e.preventDefault()
     setExportando(true)
     try {
-      const res = await fetch(`/api/horas-extra/exportar?fecha_inicio=${expDesde}&fecha_fin=${expHasta}`)
-      if (!res.ok) { setExportando(false); return }
+      const res = await fetch(`/api/horas-extra/reporte?fecha_inicio=${expDesde}&fecha_fin=${expHasta}`)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert(err.error || 'Error al generar el reporte')
+        return
+      }
       const blob = await res.blob()
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement('a')
       a.href     = url
-      a.download = `horas-extra_${expDesde}_${expHasta}.xlsx`
+      a.download = `reporte-asistencia_${expDesde}_${expHasta}.xlsx`
       a.click()
       URL.revokeObjectURL(url)
       setModalExport(false)
@@ -410,26 +435,45 @@ export default function HorasExtraPage() {
 
   const cargar = useCallback(async (f: string) => {
     setLoading(true)
-    // Cargar asistencia y overrides guardados en paralelo
-    const [resReg, resOv] = await Promise.all([
+    const [resReg, resOv, resPers, resAus] = await Promise.all([
       fetch(`/api/horas-extra?fecha=${f}`),
       fetch(`/api/horas-extra/override?fecha=${f}`),
+      fetch('/api/personal'),
+      fetch(`/api/ausentismos?fecha=${f}`),
     ])
-    const dataReg = await resReg.json()
-    const dataOv  = resOv.ok ? await resOv.json() : []
+    const dataReg  = await resReg.json()
+    const dataOv   = resOv.ok  ? await resOv.json()  : []
+    const dataPers = resPers.ok ? await resPers.json() : []
+    const dataAus  = resAus.ok  ? await resAus.json()  : []
+
     setRegistros(dataReg.registros ?? [])
-    // Restaurar overrides guardados en BD
+
+    // Personal fijo Operario/Supervisor
+    setPersonalFijo((dataPers as PersonalFijo[]).filter(
+      (p: PersonalFijo & { tipo_contrato?: string; activo?: boolean }) =>
+        p.activo !== false &&
+        (p.tipo_contrato ?? 'Fijo') === 'Fijo' &&
+        ['Operario', 'Supervisor'].includes(p.rol)
+    ))
+
+    // Overrides guardados
     const ovMap: Record<string, Override> = {}
     for (const ov of dataOv) {
       if (ov.hora_ingreso || ov.salida_efectiva || ov.horas_extra_manual) {
         ovMap[ov.cedula] = {
-          hora_ingreso:      ov.hora_ingreso      ?? '',
-          salida_efectiva:   ov.salida_efectiva   ?? '',
+          hora_ingreso:       ov.hora_ingreso       ?? '',
+          salida_efectiva:    ov.salida_efectiva    ?? '',
           horas_extra_manual: ov.horas_extra_manual ?? undefined,
         }
       }
     }
     setOverrides(ovMap)
+
+    // Ausentismos del día
+    const ausMap: Record<string, TipoAusentismo> = {}
+    for (const a of dataAus) ausMap[a.cedula] = a.tipo
+    setAusentismos(ausMap)
+
     setLoading(false)
   }, [])
 
@@ -466,6 +510,26 @@ export default function HorasExtraPage() {
     ? registrosEfectivos
     : registrosEfectivos.filter(r => r.rol === filtroRol)
 
+  // Ausentes del día: personal fijo sin asistencia
+  const cedulasConAsistencia = new Set(registros.map(r => r.cedula))
+  const ausentes = personalFijo.filter(p => !cedulasConAsistencia.has(p.cedula))
+
+  async function guardarAusentismo(p: PersonalFijo, tipo: TipoAusentismo | '') {
+    setGuardandoAus(p.cedula)
+    if (tipo === '') {
+      await fetch(`/api/ausentismos?cedula=${p.cedula}&fecha=${fecha}`, { method: 'DELETE' })
+      setAusentismos(prev => { const n = { ...prev }; delete n[p.cedula]; return n })
+    } else {
+      await fetch('/api/ausentismos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cedula: p.cedula, nombre: p.nombre, fecha, tipo }),
+      })
+      setAusentismos(prev => ({ ...prev, [p.cedula]: tipo }))
+    }
+    setGuardandoAus(null)
+  }
+
   // KPIs
   const conExtra      = registrosEfectivos.filter(r => r.minutos_extra > 0)
   const conRecargo    = registrosEfectivos.filter(r => r.horas_recargo > 0)
@@ -479,15 +543,15 @@ export default function HorasExtraPage() {
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Clock size={22} className="text-yellow-400" /> Horas Extra
+            <Clock size={22} className="text-yellow-400" /> Control de Asistencia y Novedades de Nómina
           </h1>
-          <p className="text-gray-500 text-sm mt-0.5">Control de tiempo adicional y recargo nocturno</p>
+          <p className="text-gray-500 text-sm mt-0.5">Horas extra, recargos nocturnos y ausentismos del personal fijo</p>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => setModalExport(true)}
             className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110"
             style={{ background: 'linear-gradient(135deg,#14532d,#166534)', border: '1px solid #4ade80' }}>
-            <Download size={14} /> Exportar Excel
+            <FileBarChart2 size={14} /> Reporte
           </button>
           <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
             className="bg-gray-900 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-yellow-500"
@@ -716,6 +780,90 @@ export default function HorasExtraPage() {
         </div>
       )}
 
+      {/* ── Ausentes del día (personal fijo sin asistencia) ── */}
+      {!loading && ausentes.length > 0 && (
+        <div className="mt-6">
+          <div className="flex items-center gap-2 mb-3">
+            <UserX size={16} className="text-red-400" />
+            <h2 className="text-white font-bold text-sm">Ausentes del día</h2>
+            <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
+              style={{ background: 'rgba(239,68,68,0.15)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}>
+              {ausentes.length} sin asistencia
+            </span>
+            <span className="text-xs text-gray-600">— Personal fijo (Operario / Supervisor)</span>
+          </div>
+
+          <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #2d1515', background: '#0d1117' }}>
+            <table className="w-full text-xs">
+              <thead>
+                <tr style={{ background: '#1a0a0a', borderBottom: '1px solid #2d1515' }}>
+                  <th className="px-3 py-2.5 text-left font-bold uppercase tracking-wide text-red-900/80" style={{ fontSize: '0.65rem' }}>NOMBRE</th>
+                  <th className="px-3 py-2.5 text-left font-bold uppercase tracking-wide text-red-900/80" style={{ fontSize: '0.65rem' }}>CÉDULA</th>
+                  <th className="px-3 py-2.5 text-left font-bold uppercase tracking-wide text-red-900/80" style={{ fontSize: '0.65rem' }}>ROL</th>
+                  <th className="px-3 py-2.5 text-left font-bold uppercase tracking-wide text-red-900/80" style={{ fontSize: '0.65rem' }}>TIPO DE AUSENTISMO</th>
+                  <th className="px-3 py-2.5 text-left font-bold uppercase tracking-wide text-red-900/80" style={{ fontSize: '0.65rem' }}>ESTADO</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ausentes.map((p, i) => {
+                  const tipoActual = ausentismos[p.cedula] ?? ''
+                  const guardando  = guardandoAus === p.cedula
+                  return (
+                    <tr key={p.cedula} style={{
+                      background: tipoActual ? 'rgba(120,40,0,0.15)' : i % 2 === 0 ? '#0d1117' : '#0f172a',
+                      borderBottom: '1px solid #1a1010'
+                    }}>
+                      <td className="px-3 py-2.5 text-white font-medium">
+                        {p.nombre}
+                        {p.rol === 'Supervisor' && (
+                          <span className="ml-1.5 text-[9px] font-bold px-1 py-0.5 rounded"
+                            style={{ background: 'rgba(124,58,237,0.25)', color: '#c4b5fd' }}>SUP</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-500 font-mono">{p.cedula}</td>
+                      <td className="px-3 py-2.5">
+                        <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${p.rol === 'Supervisor' ? 'bg-purple-900/40 text-purple-300' : 'bg-blue-900/40 text-blue-300'}`}>
+                          {p.rol}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        <select
+                          value={tipoActual}
+                          disabled={guardando}
+                          onChange={e => guardarAusentismo(p, e.target.value as TipoAusentismo | '')}
+                          className="text-xs rounded px-2 py-1 focus:outline-none cursor-pointer disabled:opacity-50"
+                          style={{
+                            background: tipoActual ? 'rgba(120,40,0,0.3)' : '#1f2937',
+                            border: `1px solid ${tipoActual ? '#9a3412' : '#374151'}`,
+                            color: tipoActual ? '#fdba74' : '#6b7280',
+                            minWidth: 220,
+                          }}>
+                          <option value="">— Seleccionar ausentismo —</option>
+                          {TIPOS_AUSENTISMO.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-3 py-2.5">
+                        {guardando ? (
+                          <Loader2 size={13} className="animate-spin text-gray-500" />
+                        ) : tipoActual ? (
+                          <span className="flex items-center gap-1 text-xs font-semibold" style={{ color: '#fdba74' }}>
+                            <CheckCircle2 size={11} /> Registrado
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-xs" style={{ color: '#ef4444' }}>
+                            <AlertTriangle size={11} /> Sin novedad
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {/* Resumen recargo */}
       {!loading && conRecargo.length > 0 && (
         <div className="mt-4 rounded-xl p-4 flex items-start gap-3"
@@ -782,14 +930,14 @@ export default function HorasExtraPage() {
             style={{ background: '#111827', border: '1px solid #374151' }}>
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-white font-bold text-base flex items-center gap-2">
-                <Download size={16} className="text-green-400" /> Exportar a Excel
+                <FileBarChart2 size={16} className="text-green-400" /> Reporte Asistencia y Nómina
               </h3>
               <button onClick={() => setModalExport(false)} className="text-gray-500 hover:text-white">
                 <X size={16} />
               </button>
             </div>
             <p className="text-gray-400 text-xs mb-4">
-              Descarga las horas extra <strong className="text-green-400">aprobadas</strong> y recargos nocturnos del personal operario. Incluye hoja de resumen por persona.
+              Reporte combinado del personal fijo (Operario/Supervisor): asistencia, horas extra, recargos nocturnos y ausentismos del período seleccionado.
             </p>
             <form onSubmit={descargarExcel} className="flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-3">

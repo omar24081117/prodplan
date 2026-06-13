@@ -15,7 +15,7 @@ const NAV_COMPLETO = [
   { href: '/admin/causales-paro',           icon: <AlertTriangle size={14} />,   label: 'Causales Paro' },
   { href: '/admin/personal',               icon: <Users size={14} />,            label: 'Personal' },
   { href: '/admin/usuarios',               icon: <UserCog size={14} />,          label: 'Usuarios' },
-  { href: '/admin/horas-extra',            icon: <Clock size={14} />,            label: 'Horas Extra' },
+  { href: '/admin/horas-extra',            icon: <Clock size={14} />,            label: 'Asist. & Nómina' },
   { href: '/admin/catalogo-ean',          icon: <Barcode size={14} />,          label: 'Catálogo EAN' },
 ]
 
