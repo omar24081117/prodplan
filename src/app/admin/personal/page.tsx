@@ -102,12 +102,17 @@ export default function PersonalPage() {
 
   async function cambiarContrato(op: Operario, nuevoTipo: TipoContrato) {
     setEditandoContrato(op.id)
-    await fetch(`/api/personal/${op.id}`, {
+    const res = await fetch(`/api/personal/${op.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tipo_contrato: nuevoTipo }),
     })
-    setPersonal(prev => prev.map(p => p.id === op.id ? { ...p, tipo_contrato: nuevoTipo } : p))
+    if (res.ok) {
+      setPersonal(prev => prev.map(p => p.id === op.id ? { ...p, tipo_contrato: nuevoTipo } : p))
+    } else {
+      const err = await res.json().catch(() => ({}))
+      setError(err.error || 'No se pudo guardar. Ejecuta el SQL de migración en Supabase.')
+    }
     setEditandoContrato(null)
   }
 
@@ -249,6 +254,13 @@ export default function PersonalPage() {
       </div>
 
       <p className="text-gray-500 text-xs mb-2">{activos.length} activos · {inactivos.length} inactivos</p>
+
+      {error && !showForm && (
+        <div className="flex items-center justify-between bg-red-950/50 border border-red-800 rounded-lg px-4 py-2.5 mb-2">
+          <p className="text-red-400 text-sm">{error}</p>
+          <button onClick={() => setError('')} className="text-red-600 hover:text-red-400 text-xs ml-4">✕</button>
+        </div>
+      )}
 
       {/* Tabla */}
       <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
