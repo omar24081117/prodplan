@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Clock, CheckCircle2, Loader2, AlertTriangle, X, Settings, XCircle, Download, UserX, FileBarChart2 } from 'lucide-react'
 
 const TIPOS_AUSENTISMO = [
+  'Descanso',
   'Sin Justa Causa',
   'Permiso Remunerado',
   'Permiso No Remunerado',
@@ -404,6 +405,7 @@ export default function HorasExtraPage() {
   const [personalFijo, setPersonalFijo]       = useState<PersonalFijo[]>([])
   const [ausentismos, setAusentismos]         = useState<Record<string, TipoAusentismo>>({})
   const [guardandoAus, setGuardandoAus]       = useState<string | null>(null)
+  const [marcandoTodos, setMarcandoTodos]     = useState(false)
 
   function scrollTabla(dir: 'left' | 'right') {
     if (!tablaRef.current) return
@@ -513,6 +515,25 @@ export default function HorasExtraPage() {
   // Ausentes del día: personal fijo sin asistencia
   const cedulasConAsistencia = new Set(registros.map(r => r.cedula))
   const ausentes = personalFijo.filter(p => !cedulasConAsistencia.has(p.cedula))
+
+  async function marcarTodosDescanso() {
+    const sinNovedad = ausentes.filter(p => !ausentismos[p.cedula])
+    if (sinNovedad.length === 0) return
+    setMarcandoTodos(true)
+    await Promise.all(sinNovedad.map(p =>
+      fetch('/api/ausentismos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cedula: p.cedula, nombre: p.nombre, fecha, tipo: 'Descanso' }),
+      })
+    ))
+    setAusentismos(prev => {
+      const nuevo = { ...prev }
+      for (const p of sinNovedad) nuevo[p.cedula] = 'Descanso'
+      return nuevo
+    })
+    setMarcandoTodos(false)
+  }
 
   async function guardarAusentismo(p: PersonalFijo, tipo: TipoAusentismo | '') {
     setGuardandoAus(p.cedula)
@@ -783,7 +804,7 @@ export default function HorasExtraPage() {
       {/* ── Ausentes del día (personal fijo sin asistencia) ── */}
       {!loading && ausentes.length > 0 && (
         <div className="mt-6">
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
             <UserX size={16} className="text-red-400" />
             <h2 className="text-white font-bold text-sm">Ausentes del día</h2>
             <span className="text-xs px-2 py-0.5 rounded-full font-semibold"
@@ -791,6 +812,19 @@ export default function HorasExtraPage() {
               {ausentes.length} sin asistencia
             </span>
             <span className="text-xs text-gray-600">— Personal fijo (Operario / Supervisor)</span>
+
+            {/* Botón marcar todos como Descanso */}
+            {ausentes.some(p => !ausentismos[p.cedula]) && (
+              <button
+                onClick={marcarTodosDescanso}
+                disabled={marcandoTodos}
+                className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:brightness-110 disabled:opacity-50"
+                style={{ background: 'rgba(14,116,144,0.2)', border: '1px solid rgba(34,211,238,0.4)', color: '#67e8f9' }}>
+                {marcandoTodos
+                  ? <><Loader2 size={12} className="animate-spin" /> Guardando...</>
+                  : <><CheckCircle2 size={12} /> Marcar todos como Descanso</>}
+              </button>
+            )}
           </div>
 
           <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #2d1515', background: '#0d1117' }}>
