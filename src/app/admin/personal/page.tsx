@@ -26,17 +26,26 @@ const ROL_COLORS: Record<string, string> = {
   Gerencia:       'bg-emerald-900/50 text-emerald-300',
 }
 
-type Operario = { id: string; cedula: string; nombre: string; activo: boolean; rol: Rol }
+type TipoContrato = 'Fijo' | 'Temporal'
+const TIPOS_CONTRATO: TipoContrato[] = ['Fijo', 'Temporal']
+const CONTRATO_COLORS: Record<string, string> = {
+  Fijo:     'bg-emerald-900/50 text-emerald-300',
+  Temporal: 'bg-amber-900/50 text-amber-300',
+}
+
+type Operario = { id: string; cedula: string; nombre: string; activo: boolean; rol: Rol; tipo_contrato: TipoContrato | null }
 
 export default function PersonalPage() {
   const [personal, setPersonal]   = useState<Operario[]>([])
   const [busqueda, setBusqueda]   = useState('')
   const [filtroRol, setFiltroRol] = useState('')
-  const [form, setForm]           = useState({ cedula: '', nombre: '', rol: 'Operario' as Rol })
+  const [form, setForm]           = useState({ cedula: '', nombre: '', rol: 'Operario' as Rol, tipo_contrato: 'Fijo' as TipoContrato })
   const [showForm, setShowForm]   = useState(false)
   const [saving, setSaving]       = useState(false)
   const [error, setError]         = useState('')
-  const [editandoRol, setEditandoRol] = useState<string | null>(null)
+  const [editandoRol, setEditandoRol]             = useState<string | null>(null)
+  const [editandoContrato, setEditandoContrato]   = useState<string | null>(null)
+  const [filtroContrato, setFiltroContrato]       = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
   const cargar = useCallback(async () => {
@@ -48,9 +57,10 @@ export default function PersonalPage() {
   useEffect(() => { cargar() }, [cargar])
 
   const filtrados = personal.filter(p => {
-    const matchBusqueda = p.cedula.includes(busqueda) || p.nombre.toLowerCase().includes(busqueda.toLowerCase())
-    const matchRol      = !filtroRol || p.rol === filtroRol
-    return matchBusqueda && matchRol
+    const matchBusqueda  = p.cedula.includes(busqueda) || p.nombre.toLowerCase().includes(busqueda.toLowerCase())
+    const matchRol       = !filtroRol      || p.rol === filtroRol
+    const matchContrato  = !filtroContrato || (p.tipo_contrato ?? 'Fijo') === filtroContrato
+    return matchBusqueda && matchRol && matchContrato
   })
 
   async function guardar(e: React.FormEvent) {
@@ -60,11 +70,11 @@ export default function PersonalPage() {
     const res = await fetch('/api/personal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cedula: form.cedula.trim(), nombre: form.nombre.trim(), rol: form.rol }),
+      body: JSON.stringify({ cedula: form.cedula.trim(), nombre: form.nombre.trim(), rol: form.rol, tipo_contrato: form.tipo_contrato }),
     })
     const data = await res.json()
     if (!res.ok) setError(data.error || 'Error al guardar')
-    else { setShowForm(false); setForm({ cedula: '', nombre: '', rol: 'Operario' }); cargar() }
+    else { setShowForm(false); setForm({ cedula: '', nombre: '', rol: 'Operario', tipo_contrato: 'Fijo' }); cargar() }
     setSaving(false)
   }
 
@@ -90,6 +100,17 @@ export default function PersonalPage() {
     setEditandoRol(null)
   }
 
+  async function cambiarContrato(op: Operario, nuevoTipo: TipoContrato) {
+    setEditandoContrato(op.id)
+    await fetch(`/api/personal/${op.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tipo_contrato: nuevoTipo }),
+    })
+    setPersonal(prev => prev.map(p => p.id === op.id ? { ...p, tipo_contrato: nuevoTipo } : p))
+    setEditandoContrato(null)
+  }
+
   async function importarExcel(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -101,12 +122,15 @@ export default function PersonalPage() {
     const payload = rows
       .filter(r => r.Cédula || r.cedula || r.CEDULA)
       .map(r => {
-        const rolRaw = String(r.Rol || r.rol || r.ROL || 'Operario').trim()
-        const rol    = ROLES.includes(rolRaw as Rol) ? rolRaw : 'Operario'
+        const rolRaw      = String(r.Rol || r.rol || r.ROL || 'Operario').trim()
+        const rol         = ROLES.includes(rolRaw as Rol) ? rolRaw : 'Operario'
+        const contratoRaw = String(r.Contrato || r.contrato || r.CONTRATO || 'Fijo').trim()
+        const tipo_contrato = TIPOS_CONTRATO.includes(contratoRaw as TipoContrato) ? contratoRaw : 'Fijo'
         return {
           cedula: String(r.Cédula || r.cedula || r.CEDULA).trim(),
           nombre: String(r.Nombre  || r.nombre  || r.NOMBRE  || '').trim(),
           rol,
+          tipo_contrato,
           activo: true,
         }
       })
@@ -128,9 +152,10 @@ export default function PersonalPage() {
   function exportar() {
     const ws = XLSX.utils.json_to_sheet(
       personal.filter(p => p.activo).map(p => ({
-        Cédula: p.cedula,
-        Nombre: p.nombre,
-        Rol:    p.rol,
+        Cédula:    p.cedula,
+        Nombre:    p.nombre,
+        Rol:       p.rol,
+        Contrato:  p.tipo_contrato ?? 'Fijo',
       }))
     )
     const wb = XLSX.utils.book_new()
@@ -182,6 +207,14 @@ export default function PersonalPage() {
               {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
+          <div>
+            <label className="text-gray-400 text-xs block mb-1">Contrato</label>
+            <select value={form.tipo_contrato} onChange={e => setForm(f => ({ ...f, tipo_contrato: e.target.value as TipoContrato }))}
+              className="bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none cursor-pointer">
+              <option value="Fijo">Fijo</option>
+              <option value="Temporal">Temporal</option>
+            </select>
+          </div>
           {error && <p className="text-red-400 text-xs w-full">{error}</p>}
           <button type="submit" disabled={saving}
             className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold px-4 py-2 rounded-lg text-sm">
@@ -207,6 +240,12 @@ export default function PersonalPage() {
           <option value="">Todos los roles</option>
           {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
         </select>
+        <select value={filtroContrato} onChange={e => setFiltroContrato(e.target.value)}
+          className="bg-gray-900 border border-gray-800 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none cursor-pointer">
+          <option value="">Fijo / Temporal</option>
+          <option value="Fijo">Fijo</option>
+          <option value="Temporal">Temporal</option>
+        </select>
       </div>
 
       <p className="text-gray-500 text-xs mb-2">{activos.length} activos · {inactivos.length} inactivos</p>
@@ -222,6 +261,7 @@ export default function PersonalPage() {
                 <th className="text-left text-gray-400 px-4 py-2.5 font-medium">Cédula</th>
                 <th className="text-left text-gray-400 px-4 py-2.5 font-medium">Nombre</th>
                 <th className="text-left text-gray-400 px-4 py-2.5 font-medium">Rol</th>
+                <th className="text-left text-gray-400 px-4 py-2.5 font-medium">Contrato</th>
                 <th className="text-left text-gray-400 px-4 py-2.5 font-medium">Estado</th>
                 <th className="px-4 py-2.5"></th>
               </tr>
@@ -248,6 +288,20 @@ export default function PersonalPage() {
                     )}
                   </td>
 
+                  {/* Contrato editable inline */}
+                  <td className="px-4 py-2.5">
+                    <select
+                      value={p.tipo_contrato ?? 'Fijo'}
+                      onChange={e => cambiarContrato(p, e.target.value as TipoContrato)}
+                      disabled={editandoContrato === p.id}
+                      className={`text-xs font-semibold px-2 py-1 rounded border-0 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 ${CONTRATO_COLORS[p.tipo_contrato ?? 'Fijo']}`}
+                      style={{ background: 'transparent' }}
+                    >
+                      {TIPOS_CONTRATO.map(t => <option key={t} value={t} className="bg-gray-800 text-white">{t}</option>)}
+                    </select>
+                    {editandoContrato === p.id && <span className="ml-1 text-[10px] text-gray-500">...</span>}
+                  </td>
+
                   <td className="px-4 py-2.5">
                     <span className={`text-xs px-2 py-0.5 rounded ${p.activo ? 'bg-emerald-900/50 text-emerald-400' : 'bg-gray-800 text-gray-500'}`}>
                       {p.activo ? 'Activo' : 'Inactivo'}
@@ -267,7 +321,7 @@ export default function PersonalPage() {
 
       {/* Nota Excel */}
       <p className="text-gray-600 text-xs mt-3">
-        💡 El Excel acepta columnas: <span className="text-gray-500">Cédula, Nombre, Rol</span> (si no se incluye Rol, se asigna Operario por defecto)
+        💡 El Excel acepta columnas: <span className="text-gray-500">Cédula, Nombre, Rol, Contrato</span> (valores de Contrato: Fijo o Temporal — por defecto Fijo)
       </p>
     </div>
   )
