@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Upload, Loader2, X, AlertTriangle, Package,
@@ -149,6 +149,74 @@ create table if not exists public.plan_demanda_diaria (
 );
 alter table public.plan_demanda_diaria enable row level security;
 create policy "plan_demanda_all" on public.plan_demanda_diaria for all using (true) with check (true);`
+
+/* ──────────────────────────────────────────────────────────────────────────
+   Actividades table — memoized so modal state changes don't re-render it
+────────────────────────────────────────────────────────────────────────── */
+const ActividadesTabla = React.memo(function ActividadesTabla({
+  refsAct,
+  actPorRef,
+  filtroAct,
+}: {
+  refsAct: string[]
+  actPorRef: Record<string, Actividad[]>
+  filtroAct: string
+}) {
+  if (refsAct.length === 0) return null
+  return (
+    <div className="rounded-xl overflow-hidden shadow-sm" style={{ border: '1px solid #b7ddb7' }}>
+      <table className="w-full text-xs">
+        <thead>
+          <tr style={{ background: '#c8e6c9', borderBottom: '2px solid #a3c9a3' }}>
+            {['REF','PRODUCTO','ACTIVIDAD','REF INSUMO'].map(h => (
+              <th key={h} className="px-4 py-3 text-left font-bold uppercase tracking-wider"
+                style={{ color: '#1a4a1a', fontSize: '0.65rem' }}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {refsAct.filter(ref => {
+            if (!filtroAct) return true
+            const q = filtroAct.toLowerCase()
+            const acts = actPorRef[ref]
+            return ref.toLowerCase().includes(q) || (acts[0]?.descripcion_producto ?? '').toLowerCase().includes(q)
+          }).flatMap((ref, ri) => {
+            const acts = actPorRef[ref]
+            const rowBg = ri % 2 === 0 ? '#ffffff' : '#f0faf0'
+            return acts.map((a, ai) => (
+              <tr key={a.id} style={{ background: rowBg, borderBottom: '1px solid #d4edda' }}>
+                <td className="px-4 py-2.5 font-mono font-bold" style={{ color: '#0d6a3a', minWidth: 80 }}>
+                  {ai === 0 ? ref : ''}
+                </td>
+                <td className="px-4 py-2.5 font-medium" style={{ color: '#1a3a1a', maxWidth: 300 }}>
+                  {ai === 0 ? (a.descripcion_producto ?? ref) : ''}
+                </td>
+                <td className="px-4 py-2.5">
+                  <span className="px-2.5 py-1 rounded-full text-xs font-semibold"
+                    style={{
+                      background: a.actividad.toLowerCase().includes('fabr') ? '#dbeafe'
+                        : a.actividad.toLowerCase().includes('etiq') ? '#ede9fe'
+                        : a.actividad.toLowerCase().includes('envas') ? '#fef9c3'
+                        : '#dcfce7',
+                      color: a.actividad.toLowerCase().includes('fabr') ? '#1d4ed8'
+                        : a.actividad.toLowerCase().includes('etiq') ? '#7c3aed'
+                        : a.actividad.toLowerCase().includes('envas') ? '#854d0e'
+                        : '#166534',
+                    }}>
+                    {a.actividad}
+                  </span>
+                </td>
+                <td className="px-4 py-2.5 font-mono" style={{ color: '#4b6a4b' }}>
+                  {a.sub_referencia ?? <span style={{ color: '#c0c0c0' }}>—</span>}
+                </td>
+              </tr>
+            ))
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+})
 
 /* ──────────────────────────────────────────────────────────────────────────
    Modal — Agregar Producto (isolated to avoid re-rendering the main table)
@@ -1492,57 +1560,11 @@ export default function PlaneacionPage() {
                 <p className="text-sm">Sin actividades. Importa un Excel o agrega manualmente.</p>
               </div>
             ) : (
-              <div className="rounded-xl overflow-hidden shadow-sm" style={{ border: '1px solid #b7ddb7' }}>
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr style={{ background: '#c8e6c9', borderBottom: '2px solid #a3c9a3' }}>
-                      {['REF','PRODUCTO','ACTIVIDAD','REF INSUMO'].map(h => (
-                        <th key={h} className="px-4 py-3 text-left font-bold uppercase tracking-wider"
-                          style={{ color: '#1a4a1a', fontSize: '0.65rem' }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {refsAct.filter(ref => {
-                      if (!filtroAct) return true
-                      const q = filtroAct.toLowerCase()
-                      const acts = actPorRef[ref]
-                      return ref.toLowerCase().includes(q) || (acts[0]?.descripcion_producto ?? '').toLowerCase().includes(q)
-                    }).flatMap((ref, ri) => {
-                      const acts = actPorRef[ref]
-                      const rowBg = ri % 2 === 0 ? '#ffffff' : '#f0faf0'
-                      return acts.map((a, ai) => (
-                        <tr key={a.id} style={{ background: rowBg, borderBottom: '1px solid #d4edda' }}>
-                          <td className="px-4 py-2.5 font-mono font-bold" style={{ color: '#0d6a3a', minWidth: 80 }}>
-                            {ai === 0 ? ref : ''}
-                          </td>
-                          <td className="px-4 py-2.5 font-medium" style={{ color: '#1a3a1a', maxWidth: 300 }}>
-                            {ai === 0 ? (a.descripcion_producto ?? ref) : ''}
-                          </td>
-                          <td className="px-4 py-2.5">
-                            <span className="px-2.5 py-1 rounded-full text-xs font-semibold"
-                              style={{
-                                background: a.actividad.toLowerCase().includes('fabr') ? '#dbeafe'
-                                  : a.actividad.toLowerCase().includes('etiq') ? '#ede9fe'
-                                  : a.actividad.toLowerCase().includes('envas') ? '#fef9c3'
-                                  : '#dcfce7',
-                                color: a.actividad.toLowerCase().includes('fabr') ? '#1d4ed8'
-                                  : a.actividad.toLowerCase().includes('etiq') ? '#7c3aed'
-                                  : a.actividad.toLowerCase().includes('envas') ? '#854d0e'
-                                  : '#166534',
-                              }}>
-                              {a.actividad}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2.5 font-mono" style={{ color: '#4b6a4b' }}>
-                            {a.sub_referencia ?? <span style={{ color: '#c0c0c0' }}>—</span>}
-                          </td>
-                        </tr>
-                      ))
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <ActividadesTabla
+                refsAct={refsAct}
+                actPorRef={actPorRef}
+                filtroAct={filtroAct}
+              />
             )}
 
             {/* ── Modal agregar producto manual ── */}
