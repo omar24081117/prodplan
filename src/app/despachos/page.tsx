@@ -4,7 +4,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Truck, ArrowLeft, Upload, Plus, X, Trash2, Search,
-  Loader2, CheckCircle2, Clock, AlertTriangle, LogOut, User
+  Loader2, CheckCircle2, Clock, AlertTriangle, LogOut, User, Package
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -32,6 +32,16 @@ type Despacho = {
 }
 
 type Estado = 'DESPACHADO' | 'VENCIDO' | 'PENDIENTE'
+
+type PickingItem = {
+  id: string
+  referencia: string | null
+  ean13: string | null
+  descripcion: string | null
+  cantidad: number
+  usuario_nombre: string | null
+  created_at: string
+}
 
 /* ─────────────────────────────────────────────────────────────────────────
    Helpers
@@ -268,6 +278,23 @@ export default function DespachosPage() {
   const [filtroAlistado, setFiltroAlistado]       = useState('')
   const [filtroGuia, setFiltroGuia]               = useState('')
   const [filtroProveedor, setFiltroProveedor]     = useState('')
+
+  // Modal picking
+  const [modalPicking, setModalPicking]   = useState<Despacho | null>(null)
+  const [pickingItems, setPickingItems]   = useState<PickingItem[]>([])
+  const [loadingPicking, setLoadingPicking] = useState(false)
+
+  async function verPicking(despacho: Despacho) {
+    setModalPicking(despacho)
+    setPickingItems([])
+    setLoadingPicking(true)
+    try {
+      const res = await fetch(`/api/picking?despacho_id=${despacho.id}`)
+      if (res.ok) setPickingItems(await res.json())
+    } finally {
+      setLoadingPicking(false)
+    }
+  }
 
   // Add form
   const [form, setForm] = useState({
@@ -507,6 +534,7 @@ export default function DespachosPage() {
   const despachados = pedidos.filter(p => p.fecha_despacho).length
   const vencidos    = pedidos.filter(p => !p.fecha_despacho && p.fecha_max_entrega && p.fecha_max_entrega < today).length
   const pendientes  = total - despachados - vencidos
+  const alistados   = pedidos.filter(p => p.alistado_por && !p.fecha_despacho).length
   const pctCumpl    = total > 0 ? Math.round((despachados / total) * 100) : 0
 
   const lineas = Array.from(new Set(pedidos.map(p => p.linea).filter(Boolean))) as string[]
@@ -757,10 +785,12 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
       <div className="flex-1 px-4 py-4 flex flex-col gap-4">
 
         {/* ── KPI cards ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
           <KpiCard label="Total pedidos" value={total} color="#60a0df"
             icon={<Truck size={18} />} />
           <KpiCard label="Despachados" value={despachados} color="#4ade80"
+            icon={<CheckCircle2 size={18} />} />
+          <KpiCard label="Alistados" value={alistados} color="#fb923c"
             icon={<CheckCircle2 size={18} />} />
           <KpiCard label="Pendientes" value={pendientes} color="#facc15"
             icon={<Clock size={18} />} />
@@ -1199,9 +1229,26 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
 
                       {/* ALISTADO POR */}
                       <td className="px-3 py-2 whitespace-nowrap">
-                        {p.alistado_por
-                          ? <span className="text-xs text-orange-300 font-medium">{p.alistado_por}</span>
-                          : <span className="text-gray-700 text-xs">—</span>}
+                        {p.alistado_por ? (
+                          <div className="flex flex-col gap-0.5">
+                            <button
+                              onClick={() => verPicking(p)}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold transition-all hover:brightness-125 active:scale-95"
+                              style={{
+                                background: 'rgba(16,185,129,0.12)',
+                                border: '1px solid rgba(16,185,129,0.35)',
+                                color: '#34d399',
+                                boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5)',
+                                cursor: 'pointer',
+                              }}>
+                              <Package size={10} /> ✓ ALISTADO
+                            </button>
+                            <span className="text-orange-300 text-xs leading-tight">{p.alistado_por}</span>
+                            {p.fecha_alistamiento && (
+                              <span className="text-gray-500 text-xs leading-tight">{fmtDate(p.fecha_alistamiento)}</span>
+                            )}
+                          </div>
+                        ) : <span className="text-gray-700 text-xs">—</span>}
                       </td>
 
                       {/* GUÍA */}
@@ -1270,6 +1317,112 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
           </p>
         )}
       </div>
+
+      {/* ── Modal picking ── */}
+      {modalPicking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(4px)' }}>
+          <div className="w-full max-w-2xl rounded-2xl shadow-2xl flex flex-col max-h-[80vh]"
+            style={{ background: '#0f2035', border: '1px solid #1a4060' }}>
+
+            {/* Header */}
+            <div className="flex items-start justify-between p-5 pb-3"
+              style={{ borderBottom: '1px solid #1a4060' }}>
+              <div>
+                <h3 className="text-white font-bold text-base flex items-center gap-2">
+                  <Package size={16} className="text-orange-400" />
+                  Detalle de Alistamiento
+                </h3>
+                <p className="text-gray-400 text-xs mt-1">
+                  <span className="text-white font-semibold">{modalPicking.cliente}</span>
+                  {modalPicking.oc && <span className="ml-2 text-gray-500">OC {modalPicking.oc}</span>}
+                  {modalPicking.documento && <span className="ml-2 text-gray-500">· DOC {modalPicking.documento}</span>}
+                </p>
+                <div className="flex items-center gap-3 mt-1.5 text-xs">
+                  <span className="text-orange-300">Alistado por: <strong>{modalPicking.alistado_por}</strong></span>
+                  {modalPicking.fecha_alistamiento && (
+                    <span className="text-gray-500">{fmtDate(modalPicking.fecha_alistamiento)}</span>
+                  )}
+                  {modalPicking.entrega_tipo && (
+                    <span className="px-1.5 py-0.5 rounded font-semibold"
+                      style={{ background: 'rgba(59,130,246,0.15)', color: '#93c5fd', border: '1px solid rgba(59,130,246,0.3)' }}>
+                      {modalPicking.entrega_tipo}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <button onClick={() => setModalPicking(null)} className="text-gray-500 hover:text-white mt-0.5">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-5 pt-3">
+              {loadingPicking ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 size={24} className="animate-spin text-orange-400" />
+                </div>
+              ) : pickingItems.length === 0 ? (
+                <div className="text-center py-12 text-gray-600">
+                  <Package size={36} strokeWidth={1} className="mx-auto mb-3" />
+                  <p className="text-sm">Sin registros de picking escaneado.</p>
+                  <p className="text-xs mt-1">El pedido fue alistado desde el formulario sin escaneo de productos.</p>
+                </div>
+              ) : (
+                <>
+                  <p className="text-xs text-gray-500 mb-3">{pickingItems.length} ítem{pickingItems.length !== 1 ? 's' : ''} escaneados</p>
+                  <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #1a3050' }}>
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr style={{ background: '#07111e', borderBottom: '1px solid #1a3050' }}>
+                          {['REFERENCIA', 'EAN', 'DESCRIPCIÓN', 'CANT.', 'ESCANEADO POR'].map(h => (
+                            <th key={h} className="px-3 py-2 text-left font-bold uppercase tracking-wide whitespace-nowrap"
+                              style={{ color: '#4b6a8a', fontSize: '0.65rem' }}>
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pickingItems.map((item, i) => (
+                          <tr key={item.id} style={{ background: i % 2 === 0 ? '#0f2035' : '#0d1a2a', borderBottom: '1px solid #0f1e30' }}>
+                            <td className="px-3 py-2 font-mono text-sky-300">{item.referencia ?? '—'}</td>
+                            <td className="px-3 py-2 font-mono text-gray-500">{item.ean13 ?? '—'}</td>
+                            <td className="px-3 py-2 text-white max-w-[220px] truncate" title={item.descripcion ?? ''}>{item.descripcion ?? '—'}</td>
+                            <td className="px-3 py-2 text-center">
+                              <span className="inline-block px-2 py-0.5 rounded font-bold"
+                                style={{ background: 'rgba(251,146,60,0.15)', color: '#fb923c' }}>
+                                {item.cantidad}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-gray-400">{item.usuario_nombre ?? '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {/* Totales */}
+                  <div className="mt-3 flex justify-end">
+                    <span className="text-xs text-gray-400">
+                      Total unidades: <strong className="text-white">
+                        {pickingItems.reduce((s, i) => s + i.cantidad, 0)}
+                      </strong>
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="px-5 pb-4">
+              <button onClick={() => setModalPicking(null)}
+                className="w-full py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors"
+                style={{ background: '#0d1a2a', border: '1px solid #1a4060' }}>
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Add form modal ── */}
       {showForm && (

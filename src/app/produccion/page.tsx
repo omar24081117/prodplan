@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { HardHat, ShieldCheck, Briefcase, ArrowLeft, Clock } from 'lucide-react'
+import { HardHat, ShieldCheck, Briefcase, ArrowLeft, Clock, BarChart2, Lock, Eye, EyeOff } from 'lucide-react'
 import LeafBackground from '@/components/LeafBackground'
 
 export default function ProduccionPage() {
@@ -13,6 +13,36 @@ export default function ProduccionPage() {
   const [passwordAdm, setPasswordAdm] = useState('')
   const [loadingOp, setLoadingOp] = useState(false)
   const [loadingAdmin, setLoadingAdmin] = useState(false)
+
+  // ── Modal Planeación ────────────────────────────────────────────────────
+  const [showPlan, setShowPlan] = useState(false)
+  const [clavePlan, setClavePlan] = useState('')
+  const [showClave, setShowClave] = useState(false)
+  const [loadingPlan, setLoadingPlan] = useState(false)
+  const [errorPlan, setErrorPlan] = useState('')
+
+  async function handlePlaneacion(e: React.FormEvent) {
+    e.preventDefault()
+    setLoadingPlan(true)
+    setErrorPlan('')
+    try {
+      const res = await fetch('/api/auth/planeacion', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clave: clavePlan }),
+      })
+      if (!res.ok) {
+        setErrorPlan('Clave incorrecta')
+      } else {
+        sessionStorage.setItem('planeacion_auth', '1')
+        router.push('/produccion/planeacion')
+      }
+    } catch {
+      setErrorPlan('Error de conexión')
+    } finally {
+      setLoadingPlan(false)
+    }
+  }
   const [loadingAdm, setLoadingAdm] = useState(false)
   const [errorOp, setErrorOp] = useState('')
   const [errorAdmin, setErrorAdmin] = useState('')
@@ -155,6 +185,28 @@ export default function ProduccionPage() {
         </div>
       </div>
 
+      {/* Card Planeación */}
+      <div className="relative z-10 w-full max-w-sm rounded-2xl p-5 cursor-pointer hover:brightness-110 transition-all"
+        style={{ background: '#1e3a14', border: '1px solid #3a6228', boxShadow: '0 8px 32px rgba(20,60,10,0.35)' }}
+        onClick={() => { setClavePlan(''); setErrorPlan(''); setShowPlan(true) }}>
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg" style={{ background: 'rgba(60,180,80,0.15)' }}>
+            <BarChart2 size={28} strokeWidth={1.5} className="text-green-400" />
+          </div>
+          <div>
+            <h2 className="text-white font-bold text-lg">Planeación</h2>
+            <p className="text-gray-400 text-xs">Demanda, inventario y forecast semanal</p>
+          </div>
+          <span className="ml-auto flex flex-col items-end gap-0.5">
+            <span className="text-gray-500 text-xl">→</span>
+            <span className="text-xs px-1.5 py-0.5 rounded font-semibold"
+              style={{ background: 'rgba(250,204,21,0.15)', color: '#fde047', border: '1px solid rgba(250,204,21,0.3)' }}>
+              Beta
+            </span>
+          </span>
+        </div>
+      </div>
+
       {/* Card Personal Administrativo */}
       <div className="relative z-10 w-full max-w-sm rounded-2xl p-6"
         style={{ background: '#1e3a14', border: '1px solid #3a6228', boxShadow: '0 8px 32px rgba(20,60,10,0.35)' }}>
@@ -228,6 +280,59 @@ export default function ProduccionPage() {
         style={{ color: '#3a5a28' }}>
         <ArrowLeft size={14} /> Volver al inicio
       </button>
+
+      {/* ── Modal Planeación ── */}
+      {showPlan && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.6)' }}>
+          <div className="relative z-10 w-full max-w-sm rounded-2xl p-7"
+            style={{ background: '#1e3a14', border: '1px solid #3a6228', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
+            {/* Header */}
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-2 rounded-lg" style={{ background: 'rgba(60,180,80,0.15)' }}>
+                <Lock size={22} strokeWidth={1.5} className="text-green-400" />
+              </div>
+              <div>
+                <h2 className="text-white font-bold text-lg">Planeación</h2>
+                <p className="text-xs" style={{ color: '#6b9c6b' }}>Acceso restringido — ingresa la clave</p>
+              </div>
+            </div>
+
+            <form onSubmit={handlePlaneacion} className="flex flex-col gap-3">
+              <div className="relative">
+                <input
+                  type={showClave ? 'text' : 'password'}
+                  placeholder="Clave de acceso"
+                  value={clavePlan}
+                  onChange={e => setClavePlan(e.target.value)}
+                  autoFocus
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 pr-10 text-lg focus:outline-none focus:border-green-500"
+                  required
+                />
+                <button type="button" onClick={() => setShowClave(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white">
+                  {showClave ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+
+              {errorPlan && (
+                <p className="text-red-400 text-sm text-center">{errorPlan}</p>
+              )}
+
+              <button type="submit" disabled={loadingPlan}
+                className="w-full text-white font-semibold rounded-xl py-3 transition-all hover:brightness-110 disabled:opacity-50 mt-1"
+                style={{ background: 'linear-gradient(135deg, #2e6e20, #3d8830)', border: '1px solid #5aaa40' }}>
+                {loadingPlan ? 'Verificando…' : 'Ingresar →'}
+              </button>
+
+              <button type="button" onClick={() => setShowPlan(false)}
+                className="text-sm text-center hover:underline mt-1"
+                style={{ color: '#4a6a35' }}>
+                Cancelar
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

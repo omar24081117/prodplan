@@ -74,20 +74,21 @@ function calcular(
   return { entradaNorm, salidaNorm, salidaEfectiva, minutosExtra, horasExtra, horasRecargo }
 }
 
-// GET /api/horas-extra/reporte?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD
+// GET /api/horas-extra/reporte?fecha_inicio=YYYY-MM-DD&fecha_fin=YYYY-MM-DD&contrato=Fijo|Temporal
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
   const fechaInicio = searchParams.get('fecha_inicio') ?? hoy.slice(0, 7) + '-01'
   const fechaFin    = searchParams.get('fecha_fin')    ?? hoy
+  const contrato    = searchParams.get('contrato') === 'Temporal' ? 'Temporal' : 'Fijo'
 
   const supabase = await createClient()
 
-  // 1. Personal Fijo con rol Operario/Supervisor activo
+  // 1. Personal con rol Operario/Supervisor activo del tipo de contrato indicado
   const { data: personalRaw, error: personalErr } = await supabase
     .from('personal')
     .select('cedula, nombre, rol')
-    .eq('tipo_contrato', 'Fijo')
+    .eq('tipo_contrato', contrato)
     .in('rol', ['Operario', 'Supervisor'])
     .eq('activo', true)
     .order('nombre', { ascending: true })
@@ -98,7 +99,7 @@ export async function GET(request: NextRequest) {
   const cedulas = personal.map((p: { cedula: string }) => p.cedula)
 
   if (cedulas.length === 0) {
-    return NextResponse.json({ error: 'Sin personal Fijo activo' }, { status: 404 })
+    return NextResponse.json({ error: `Sin personal ${contrato} activo` }, { status: 404 })
   }
 
   const nombreMap: Record<string, string> = {}
@@ -120,14 +121,16 @@ export async function GET(request: NextRequest) {
 
   if (asistErr) return NextResponse.json({ error: asistErr.message }, { status: 500 })
 
-  // 3. Ausentismos del rango
-  const { data: ausentismosRaw, error: ausErr } = await supabase
-    .from('ausentismos')
-    .select('cedula, nombre, fecha, tipo')
-    .gte('fecha', fechaInicio)
-    .lte('fecha', fechaFin)
-    .in('cedula', cedulas)
-    .order('fecha', { ascending: true })
+  // 3. Ausentismos del rango (solo aplica para Fijo)
+  const { data: ausentismosRaw, error: ausErr } = contrato === 'Fijo'
+    ? await supabase
+        .from('ausentismos')
+        .select('cedula, nombre, fecha, tipo')
+        .gte('fecha', fechaInicio)
+        .lte('fecha', fechaFin)
+        .in('cedula', cedulas)
+        .order('fecha', { ascending: true })
+    : { data: [], error: null }
 
   if (ausErr) return NextResponse.json({ error: ausErr.message }, { status: 500 })
 
@@ -282,7 +285,7 @@ export async function GET(request: NextRequest) {
   XLSX.utils.book_append_sheet(wb, ws, 'Reporte')
 
   const buffer = XLSX.write(wb, { bookType: 'xlsx', type: 'buffer' })
-  const nombreArchivo = `reporte-asistencia_${fechaInicio}_${fechaFin}.xlsx`
+  const nombreArchivo = `reporte-asistencia-${contrato.toLowerCase()}_${fechaInicio}_${fechaFin}.xlsx`
 
   return new NextResponse(buffer, {
     status: 200,

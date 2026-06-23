@@ -394,6 +394,7 @@ export default function HorasExtraPage() {
   const [modalTurno, setModalTurno]   = useState<Registro | null>(null)
   const [overrides, setOverrides]     = useState<Record<string, Override>>({})
   const [exportando, setExportando]   = useState(false)
+  const [exportandoTemp, setExportandoTemp] = useState(false)
   const [modalExport, setModalExport] = useState(false)
   const [filtroRol, setFiltroRol]     = useState<'todos' | 'Operario' | 'Supervisor'>('todos')
   const hoyExport = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
@@ -416,7 +417,7 @@ export default function HorasExtraPage() {
     e.preventDefault()
     setExportando(true)
     try {
-      const res = await fetch(`/api/horas-extra/reporte?fecha_inicio=${expDesde}&fecha_fin=${expHasta}`)
+      const res = await fetch(`/api/horas-extra/reporte?fecha_inicio=${expDesde}&fecha_fin=${expHasta}&contrato=Fijo`)
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         alert(err.error || 'Error al generar el reporte')
@@ -426,12 +427,35 @@ export default function HorasExtraPage() {
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement('a')
       a.href     = url
-      a.download = `reporte-asistencia_${expDesde}_${expHasta}.xlsx`
+      a.download = `reporte-asistencia-fijo_${expDesde}_${expHasta}.xlsx`
       a.click()
       URL.revokeObjectURL(url)
       setModalExport(false)
     } finally {
       setExportando(false)
+    }
+  }
+
+  async function descargarExcelTemporal(e: React.MouseEvent) {
+    e.preventDefault()
+    setExportandoTemp(true)
+    try {
+      const res = await fetch(`/api/horas-extra/reporte?fecha_inicio=${expDesde}&fecha_fin=${expHasta}&contrato=Temporal`)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        alert(err.error || 'Error al generar el reporte temporal')
+        return
+      }
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `reporte-asistencia-temporal_${expDesde}_${expHasta}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+      setModalExport(false)
+    } finally {
+      setExportandoTemp(false)
     }
   }
 
@@ -971,7 +995,7 @@ export default function HorasExtraPage() {
               </button>
             </div>
             <p className="text-gray-400 text-xs mb-4">
-              Reporte combinado del personal fijo (Operario/Supervisor): asistencia, horas extra, recargos nocturnos y ausentismos del período seleccionado.
+              Reporte combinado (Operario/Supervisor): asistencia, horas extra, recargos nocturnos y ausentismos. Selecciona el tipo de contrato.
             </p>
             <form onSubmit={descargarExcel} className="flex flex-col gap-4">
               <div className="grid grid-cols-2 gap-3">
@@ -990,17 +1014,25 @@ export default function HorasExtraPage() {
                   />
                 </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="submit" disabled={exportando || exportandoTemp}
+                    className="py-2 rounded-lg text-sm font-semibold text-white flex items-center justify-center gap-1.5 disabled:opacity-50 transition-all hover:brightness-110"
+                    style={{ background: 'linear-gradient(135deg,#14532d,#166534)', border: '1px solid #4ade80' }}>
+                    {exportando ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                    {exportando ? 'Generando...' : 'Fijo'}
+                  </button>
+                  <button type="button" onClick={descargarExcelTemporal} disabled={exportando || exportandoTemp}
+                    className="py-2 rounded-lg text-sm font-semibold text-white flex items-center justify-center gap-1.5 disabled:opacity-50 transition-all hover:brightness-110"
+                    style={{ background: 'linear-gradient(135deg,#78350f,#92400e)', border: '1px solid #f59e0b' }}>
+                    {exportandoTemp ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                    {exportandoTemp ? 'Generando...' : 'Temporal'}
+                  </button>
+                </div>
                 <button type="button" onClick={() => setModalExport(false)}
-                  className="flex-1 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors"
+                  className="w-full py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors"
                   style={{ background: '#1f2937', border: '1px solid #374151' }}>
                   Cancelar
-                </button>
-                <button type="submit" disabled={exportando}
-                  className="flex-1 py-2 rounded-lg text-sm font-semibold text-white flex items-center justify-center gap-1.5 disabled:opacity-50 transition-all hover:brightness-110"
-                  style={{ background: 'linear-gradient(135deg,#14532d,#166534)', border: '1px solid #4ade80' }}>
-                  {exportando ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
-                  {exportando ? 'Generando...' : 'Descargar'}
                 </button>
               </div>
             </form>
