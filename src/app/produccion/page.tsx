@@ -197,13 +197,7 @@ export default function ProduccionPage() {
             <h2 className="text-white font-bold text-lg">Planeación</h2>
             <p className="text-gray-400 text-xs">Demanda, inventario y forecast semanal</p>
           </div>
-          <span className="ml-auto flex flex-col items-end gap-0.5">
-            <span className="text-gray-500 text-xl">→</span>
-            <span className="text-xs px-1.5 py-0.5 rounded font-semibold"
-              style={{ background: 'rgba(250,204,21,0.15)', color: '#fde047', border: '1px solid rgba(250,204,21,0.3)' }}>
-              Beta
-            </span>
-          </span>
+          <span className="ml-auto text-gray-500 text-xl">→</span>
         </div>
       </div>
 

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Upload, Loader2, X, AlertTriangle, Package,
-  BarChart2, Calendar, ListChecks, RefreshCw, Construction, Trash2
+  BarChart2, Calendar, ListChecks, RefreshCw, Construction, Trash2, MessageSquare, Download
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -148,7 +148,16 @@ create table if not exists public.plan_demanda_diaria (
   unique(referencia, fecha)
 );
 alter table public.plan_demanda_diaria enable row level security;
-create policy "plan_demanda_all" on public.plan_demanda_diaria for all using (true) with check (true);`
+create policy "plan_demanda_all" on public.plan_demanda_diaria for all using (true) with check (true);
+
+create table if not exists public.plan_comentarios (
+  referencia text not null, semana_inicio date not null,
+  texto text not null, autor text,
+  updated_at timestamptz default now(),
+  primary key (referencia, semana_inicio)
+);
+alter table public.plan_comentarios enable row level security;
+create policy "plan_com_all" on public.plan_comentarios for all using (true) with check (true);`
 
 /* ──────────────────────────────────────────────────────────────────────────
    Actividades table — memoized so modal state changes don't re-render it
@@ -244,8 +253,10 @@ function ModalAgregarProducto({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
-      <div className="rounded-2xl p-6 w-full max-w-lg shadow-2xl" style={{ background: '#f0faf0', border: '1px solid #b7ddb7' }}>
+    <div className="fixed inset-0 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.55)', zIndex: 9999 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="rounded-2xl p-6 w-full max-w-lg shadow-2xl overflow-y-auto"
+        style={{ background: '#f0faf0', border: '1px solid #b7ddb7', maxHeight: '90vh', zIndex: 10000, position: 'relative' }}>
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold text-base" style={{ color: '#1a4a1a' }}>Agregar Producto y Actividades</h3>
           <button onClick={onClose} style={{ color: '#6b9c6b' }}><X size={18} /></button>
@@ -347,12 +358,14 @@ export default function PlaneacionPage() {
   const [savingCell, setSavingCell]     = useState<string | null>(null)
   const [uploadingFc, setUploadingFc]   = useState(false)
   const [fcImportMsg, setFcImportMsg]   = useState('')
+  const [filtroFc, setFiltroFc]         = useState('')
   const semanas = generateSemanas()
   const saveTimer   = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fileFcRef   = useRef<HTMLInputElement>(null)
 
   // ── Plan Mensual ────────────────────────────────────────────────────────
-  const [mesFiltro, setMesFiltro] = useState('')
+  const [mesFiltro, setMesFiltro] = useState(() => getMonthLabel(toISO(new Date())))
+  const [pmExportMenu, setPmExportMenu] = useState(false)
 
   // ── Actividades ─────────────────────────────────────────────────────────
   const [actividades, setActividades]     = useState<Actividad[]>([])
@@ -367,15 +380,25 @@ export default function PlaneacionPage() {
   // ── Plan Diario (tab 4) ─────────────────────────────────────────────────
   const hoyLunes = toISO(getMonday(new Date()))
   const [semDiario, setSemDiario]         = useState(hoyLunes)
+  const [filtroDiario, setFiltroDiario]   = useState('')
+  const [diaFiltro, setDiaFiltro]         = useState<string | null>(null)
   const [planDiario, setPlanDiario]       = useState<Record<string,number>>({})
   const [loadingDiario, setLoadingDiario] = useState(false)
   const saveDiarioTimers                  = useRef<Record<string,ReturnType<typeof setTimeout>>>({})
 
   // ── Demanda Pedido (tab 5) ──────────────────────────────────────────────
   const [semDemanda, setSemDemanda]       = useState(hoyLunes)
+  const [filtroDemanda, setFiltroDemanda] = useState('')
   const [demandaOverride, setDemandaOverride] = useState<Record<string,number>>({}) // ref|fecha → pedido
   const [loadingDemanda, setLoadingDemanda]   = useState(false)
   const saveDemandaTimers                 = useRef<Record<string,ReturnType<typeof setTimeout>>>({})
+
+  // ── Comentarios ────────────────────────────────────────────────────────
+  const [comentarios, setComentarios]     = useState<Record<string, {texto: string; autor?: string}>>({})
+  const [commentModal, setCommentModal]   = useState<{key: string; ref: string; semana: string; semLabel: string} | null>(null)
+  const [commentDraft, setCommentDraft]   = useState('')
+  const [commentAuthor, setCommentAuthor] = useState('')
+  const [savingComment, setSavingComment] = useState(false)
 
   /* ── Load data ─────────────────────────────────────────────────────────── */
   const cargarInventario = useCallback(async () => {
@@ -401,14 +424,23 @@ export default function PlaneacionPage() {
     setLoadingPlan(true)
     const desde = semanas[0]
     const hasta = semanas[semanas.length - 1]
-    const res = await fetch(`/api/planeacion/plan-semanal?desde=${desde}&hasta=${hasta}`)
-    if (res.ok) {
-      const rows: PlanEntry[] = await res.json()
+    const [resPlan, resCom] = await Promise.all([
+      fetch(`/api/planeacion/plan-semanal?desde=${desde}&hasta=${hasta}`),
+      fetch(`/api/planeacion/comentarios?desde=${desde}&hasta=${hasta}`),
+    ])
+    if (resPlan.ok) {
+      const rows: PlanEntry[] = await resPlan.json()
       const map: Record<string, { pedido: number; produccion: number }> = {}
       for (const r of rows) {
         map[`${r.referencia}_${r.semana_inicio}`] = { pedido: r.pedido, produccion: r.produccion }
       }
       setPlanData(map)
+    }
+    if (resCom.ok) {
+      const rows: { referencia: string; semana_inicio: string; texto: string; autor?: string }[] = await resCom.json()
+      const map: Record<string, {texto: string; autor?: string}> = {}
+      for (const r of rows) map[`${r.referencia}_${r.semana_inicio}`] = { texto: r.texto, autor: r.autor }
+      setComentarios(map)
     }
     setLoadingPlan(false)
   }, [])
@@ -446,8 +478,20 @@ export default function PlaneacionPage() {
   }, [])
 
   useEffect(() => { cargarInventario() }, [cargarInventario])
-  useEffect(() => { if (tab === 1 || tab === 2 || tab === 4 || tab === 5) cargarPlan() }, [tab, cargarPlan])
-  useEffect(() => { if (tab === 3 || tab === 4) cargarActividades() }, [tab, cargarActividades])
+  useEffect(() => { if (tab === 0 || tab === 1 || tab === 2 || tab === 3) cargarPlan() }, [tab, cargarPlan])
+  useEffect(() => { if (tab === 2 || tab === 5) cargarActividades() }, [tab, cargarActividades])
+  useEffect(() => { if (tab === 1 || tab === 3) cargarDemanda() }, [tab])
+  // Scroll to current week once data finishes loading (avoids scroll reset on re-render)
+  useEffect(() => {
+    if (tab === 0 && !loadingPlan) setTimeout(fcScrollToToday, 0)
+  }, [tab, loadingPlan]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (tab === 1 && !loadingDemanda) setTimeout(dmScrollToToday, 0)
+  }, [tab, loadingDemanda]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Jump to current month on Plan Mensual
+  useEffect(() => {
+    if (tab === 3) setMesFiltro(getMonthLabel(toISO(new Date())))
+  }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Helpers semana diario
   function getDias(mondayISO: string): string[] {
@@ -522,8 +566,7 @@ export default function PlaneacionPage() {
     }, 700)
   }
 
-  useEffect(() => { if (tab === 4) cargarPlanDiario(semDiario) }, [tab, semDiario])
-  useEffect(() => { if (tab === 5) cargarDemanda() }, [tab])
+  useEffect(() => { if (tab === 2) cargarPlanDiario(semDiario) }, [tab, semDiario])
 
   /* ── Excel import — Inventario ─────────────────────────────────────────── */
   async function handleInvExcel(e: React.ChangeEvent<HTMLInputElement>) {
@@ -837,8 +880,9 @@ export default function PlaneacionPage() {
         const dateCell = dateRow[c]
 
         if (typeof dateCell === 'number' && dateCell > 1000) {
-          // Excel serial date
-          const d = roundToMonday(new Date((dateCell - 25569) * 86400 * 1000))
+          // Excel serial date — extract in UTC to avoid timezone shift (Colombia = UTC-5)
+          const utc = new Date((dateCell - 25569) * 86400 * 1000)
+          const d = roundToMonday(new Date(utc.getUTCFullYear(), utc.getUTCMonth(), utc.getUTCDate()))
           semanaISO = toISO(d)
         } else if (typeof dateCell === 'string') {
           const parts = (dateCell as string).split('/')
@@ -923,16 +967,65 @@ export default function PlaneacionPage() {
     }
   }
 
+  /* ── Column tooltips ───────────────────────────────────────────────────── */
+  const COL_TIPS: Record<string, string> = {
+    'PEDIDO':     'Proyección de pedido semanal. Se puede ingresar manualmente o importar desde Excel. Se descuenta del saldo acumulado.',
+    'PROD':       'Producción planificada para la semana. Se ingresa manualmente. Se suma al saldo acumulado.',
+    'SALDO':      'Saldo acumulado = Existencia inicial + PROD acumulado − PEDIDO acumulado. En rojo cuando el inventario es insuficiente.',
+    'PROYECTADO': 'Demanda proyectada tomada del FORECAST (columna PEDIDO). Solo lectura. Se usa automáticamente si no hay un PEDIDO real ingresado.',
+  }
+
+  async function guardarComentario() {
+    if (!commentModal) return
+    setSavingComment(true)
+    const { ref, semana } = commentModal
+    if (!commentDraft.trim()) {
+      await fetch(`/api/planeacion/comentarios?referencia=${ref}&semana_inicio=${semana}`, { method: 'DELETE' })
+      setComentarios(prev => { const n = {...prev}; delete n[commentModal.key]; return n })
+    } else {
+      await fetch('/api/planeacion/comentarios', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ referencia: ref, semana_inicio: semana, texto: commentDraft.trim(), autor: commentAuthor.trim() || undefined }),
+      })
+      setComentarios(prev => ({ ...prev, [commentModal.key]: { texto: commentDraft.trim(), autor: commentAuthor.trim() || undefined } }))
+    }
+    setSavingComment(false)
+    setCommentModal(null)
+  }
+
   /* ── Saldo calculation ──────────────────────────────────────────────────── */
   function getSaldos(ref: string): (number | null)[] {
     const inv = inventario.find(p => p.referencia === ref)
     const semAct = inv?.semana_actualizacion ?? null
-    // Without semana_actualizacion: existencia applies from week 1 (backward compat)
-    let prev: number | null = semAct ? null : (inv?.existencia ?? 0)
+
+    if (!semAct) {
+      // Sin semana de actualización: balance arranca desde existencia en la semana 1
+      let prev = inv?.existencia ?? 0
+      return semanas.map(s => {
+        const key = `${ref}_${s}`
+        const { pedido = 0, produccion = 0 } = planData[key] ?? {}
+        prev = prev + produccion - pedido
+        return prev
+      })
+    }
+
+    // Pre-sumar pedido y producción de semanas ANTES de semana_actualizacion
+    // para que queden descontados del inventario inicial
+    let prePedido = 0, preProd = 0
+    for (const s of semanas) {
+      if (s >= semAct) break
+      const key = `${ref}_${s}`
+      prePedido += planData[key]?.pedido     ?? 0
+      preProd   += planData[key]?.produccion ?? 0
+    }
+
+    let prev: number | null = null
     return semanas.map(s => {
-      // Once we reach the update week, initialize balance with the recorded existencia
-      if (semAct && s >= semAct && prev === null) prev = inv?.existencia ?? 0
-      if (prev === null) return null
+      if (s < semAct) return null
+      if (prev === null) {
+        // Balance inicial = existencia - demanda previa + producción previa
+        prev = (inv?.existencia ?? 0) + preProd - prePedido
+      }
       const key = `${ref}_${s}`
       const { pedido = 0, produccion = 0 } = planData[key] ?? {}
       prev = prev + produccion - pedido
@@ -964,6 +1057,54 @@ export default function PlaneacionPage() {
   const mesActivo = mesFiltro || mesesDisponibles[0] || ''
   const semanasDelMes = semanasPorMes[mesActivo] ?? []
 
+  function exportarPlanMensual(mesesExport: string[]) {
+    const wb = XLSX.utils.book_new()
+    // Build flat rows: header row + data rows
+    const headerRow1: string[] = ['REF', 'PRODUCTO']
+    const headerRow2: string[] = ['', '']
+    for (const mes of mesesExport) {
+      const semsM = semanasPorMes[mes] ?? []
+      for (const s of semsM) {
+        const d = isoToDate(s)
+        const label = `SEM ${getISOWeek(d)} ${fmtShortDate(s)}`
+        headerRow1.push(label, label)
+        headerRow2.push('PROY', 'PED')
+      }
+      headerRow1.push(`PROY MES ${mes}`, `PED MES ${mes}`)
+      headerRow2.push('', '')
+    }
+    headerRow1.push('TOTAL PROY', 'TOTAL PED')
+    headerRow2.push('', '')
+
+    const rows: (string | number)[][] = [headerRow1, headerRow2]
+
+    for (const prod of inventario) {
+      const row: (string | number)[] = [prod.referencia, prod.descripcion ?? '']
+      let totalProy = 0, totalPed = 0
+      for (const mes of mesesExport) {
+        const semsM = semanasPorMes[mes] ?? []
+        let proyMes = 0, pedMes = 0
+        for (const s of semsM) {
+          const proy = planData[`${prod.referencia}_${s}`]?.pedido ?? 0
+          const ped  = demandaOverride[`${prod.referencia}|${s}`] ?? 0
+          row.push(proy || '', ped || '')
+          proyMes += proy; pedMes += ped
+        }
+        row.push(proyMes || '', pedMes || '')
+        totalProy += proyMes; totalPed += pedMes
+      }
+      row.push(totalProy || '', totalPed || '')
+      rows.push(row)
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet(rows)
+    // Auto column widths
+    ws['!cols'] = rows[0].map((_, ci) => ({ wch: ci < 2 ? (ci === 0 ? 10 : 32) : 10 }))
+    XLSX.utils.book_append_sheet(wb, ws, 'Plan Mensual')
+    const periodo = mesesExport.length === 1 ? mesesExport[0] : `${mesesExport[0]}-${mesesExport[mesesExport.length-1]}`
+    XLSX.writeFile(wb, `Plan_Mensual_${periodo.replace(/ /g,'_')}.xlsx`)
+  }
+
   /* ── Actividades grouped by ref ─────────────────────────────────────────── */
   const actPorRef = useMemo(() => {
     const map: Record<string, Actividad[]> = {}
@@ -984,12 +1125,10 @@ export default function PlaneacionPage() {
      RENDER
   ───────────────────────────────────────────────────────────────────────── */
   const TABS = [
-    { label: 'Inventario PT/BLK', icon: <Package size={14} /> },
-    { label: 'FORECAST',          icon: <BarChart2 size={14} /> },
-    { label: 'Plan Mensual',      icon: <Calendar size={14} /> },
-    { label: 'Actividades',       icon: <ListChecks size={14} /> },
-    { label: 'Plan Diario',       icon: <BarChart2 size={14} /> },
-    { label: 'Demanda',           icon: <Calendar size={14} /> },
+    { label: 'FORECAST',    icon: <BarChart2 size={14} /> },
+    { label: 'Demanda',     icon: <Calendar size={14} /> },
+    { label: 'Plan Diario', icon: <BarChart2 size={14} /> },
+    { label: 'Plan Mensual',icon: <Calendar size={14} /> },
   ]
 
   // FORECAST scroll — drag-to-scroll
@@ -1011,6 +1150,22 @@ export default function PlaneacionPage() {
   function fcScroll(dir: number) {
     fcScrollRef.current?.scrollBy({ left: dir * 504, behavior: 'smooth' })
   }
+  function fcScrollToToday() {
+    const idx = semanas.indexOf(hoyLunes)
+    if (idx < 0 || !fcScrollRef.current) return
+    // 192px product column + 252px per week (PEDIDO+PROD+SALDO = 3×84)
+    fcScrollRef.current.scrollLeft = 192 + Math.max(0, idx - 1) * 252
+  }
+
+  // Plan Mensual scroll — drag-to-scroll
+  const pmScrollRef  = useRef<HTMLDivElement>(null)
+  const pmDragging   = useRef(false)
+  const pmDragX      = useRef(0)
+  const pmScrollX    = useRef(0)
+  function pmMouseDown(e: React.MouseEvent) { pmDragging.current = true; pmDragX.current = e.clientX; pmScrollX.current = pmScrollRef.current?.scrollLeft ?? 0 }
+  function pmMouseMove(e: React.MouseEvent) { if (!pmDragging.current || !pmScrollRef.current) return; pmScrollRef.current.scrollLeft = pmScrollX.current - (e.clientX - pmDragX.current) }
+  function pmMouseUp()    { pmDragging.current = false }
+  function pmMouseLeave() { pmDragging.current = false }
 
   // Demanda scroll — drag-to-scroll
   const dmScrollRef  = useRef<HTMLDivElement>(null)
@@ -1031,21 +1186,53 @@ export default function PlaneacionPage() {
   function dmScroll(dir: number) {
     dmScrollRef.current?.scrollBy({ left: dir * 504, behavior: 'smooth' })
   }
+  function dmScrollToToday() {
+    const idx = semanas.indexOf(hoyLunes)
+    if (idx < 0 || !dmScrollRef.current) return
+    // 312px fixed area (240 product + 72 inv) + 336px per week
+    dmScrollRef.current.scrollLeft = 312 + Math.max(0, idx - 1) * 336
+  }
 
   // Demanda SALDO calculation (respects semana_actualizacion, uses pedido override or proyectado)
   function getSaldosDemanda(ref: string): (number | null)[] {
     const inv = inventario.find(p => p.referencia === ref)
     const semAct = inv?.semana_actualizacion ?? null
-    let prev: number | null = semAct ? null : (inv?.existencia ?? 0)
-    return semanas.map(s => {
-      if (semAct && s >= semAct && prev === null) prev = inv?.existencia ?? 0
-      if (prev === null) return null
+
+    const efectivoDe = (s: string) => {
       const key = `${ref}_${s}`
-      const { produccion = 0 } = planData[key] ?? {}
       const pedidoManual = demandaOverride[`${ref}|${s}`]
       const proyectado   = planData[key]?.pedido ?? 0
-      const efectivo = (pedidoManual !== undefined && pedidoManual > 0) ? pedidoManual : proyectado
-      prev = prev + produccion - efectivo
+      return (pedidoManual !== undefined && pedidoManual > 0) ? pedidoManual : proyectado
+    }
+
+    if (!semAct) {
+      let prev = inv?.existencia ?? 0
+      return semanas.map(s => {
+        const key = `${ref}_${s}`
+        const { produccion = 0 } = planData[key] ?? {}
+        prev = prev + produccion - efectivoDe(s)
+        return prev
+      })
+    }
+
+    // Pre-acumular demanda y producción antes de semana_actualizacion
+    let preDemanda = 0, preProd = 0
+    for (const s of semanas) {
+      if (s >= semAct) break
+      const key = `${ref}_${s}`
+      preDemanda += efectivoDe(s)
+      preProd    += planData[key]?.produccion ?? 0
+    }
+
+    let prev: number | null = null
+    return semanas.map(s => {
+      if (s < semAct) return null
+      if (prev === null) {
+        prev = (inv?.existencia ?? 0) + preProd - preDemanda
+      }
+      const key = `${ref}_${s}`
+      const { produccion = 0 } = planData[key] ?? {}
+      prev = prev + produccion - efectivoDe(s)
       return prev
     })
   }
@@ -1066,16 +1253,23 @@ export default function PlaneacionPage() {
         <div className="flex items-center gap-2 flex-1">
           <BarChart2 size={20} style={{ color: '#7acc50' }} />
           <h1 className="text-xl font-bold text-white">Planeación de Demanda e Inventario</h1>
-          <span className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-semibold ml-1"
-            style={{ background: 'rgba(250,204,21,0.2)', border: '1px solid rgba(250,204,21,0.5)', color: '#fde047' }}>
-            <Construction size={10} /> En construcción
-          </span>
         </div>
-        <button onClick={() => setShowSql(s => !s)}
-          className="text-xs px-3 py-1.5 rounded-lg transition-colors hover:brightness-110"
-          style={{ background: 'rgba(239,100,68,0.2)', border: '1px solid rgba(239,100,68,0.4)', color: '#fca08a' }}>
-          {showSql ? 'Ocultar' : 'Ver'} SQL de configuración
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setTab(4)}
+            className="px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors"
+            style={tab === 4
+              ? { background: '#4caf50', color: '#fff' }
+              : { background: 'rgba(80,180,60,0.15)', color: '#a3d982', border: '1px solid rgba(80,180,60,0.3)' }}>
+            Inventario PT/BLK
+          </button>
+          <button onClick={() => setTab(5)}
+            className="px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors"
+            style={tab === 5
+              ? { background: '#4caf50', color: '#fff' }
+              : { background: 'rgba(80,180,60,0.15)', color: '#a3d982', border: '1px solid rgba(80,180,60,0.3)' }}>
+            Actividades
+          </button>
+        </div>
       </div>
 
       {/* Error Banner */}
@@ -1122,9 +1316,9 @@ export default function PlaneacionPage() {
       <div className="flex-1 p-4 pt-3 rounded-b-xl" style={{ border: '1px solid #8ab87a', borderTop: 'none', background: 'rgba(255,255,255,0.55)', backdropFilter: 'blur(4px)' }}>
 
         {/* ══════════════════════════════════════════════════
-            TAB 0 — INVENTARIO
+            TAB 4 — INVENTARIO (header)
         ══════════════════════════════════════════════════ */}
-        {tab === 0 && (
+        {tab === 4 && (
           <div>
             <div className="flex items-center gap-3 mb-4 flex-wrap">
               <h2 className="font-bold text-sm" style={{ color: '#1e3a14' }}>Inventario Producto Terminado y BLK</h2>
@@ -1227,15 +1421,40 @@ export default function PlaneacionPage() {
         )}
 
         {/* ══════════════════════════════════════════════════
-            TAB 1 — PLAN SEMANAL
+            TAB 0 — FORECAST
         ══════════════════════════════════════════════════ */}
-        {tab === 1 && (
+        {tab === 0 && (
           <div>
             <div className="flex items-center gap-3 mb-4 flex-wrap">
               <h2 className="font-bold text-sm" style={{ color: '#1e3a14' }}>FORECAST</h2>
               <span className="text-xs" style={{ color: '#6a8a50' }}>
                 {new Date().getFullYear()} · {semanas.length} semanas
               </span>
+              {/* Buscador */}
+              <div className="relative flex items-center" style={{ minWidth: 220 }}>
+                <input
+                  type="text"
+                  value={filtroFc}
+                  onChange={e => setFiltroFc(e.target.value)}
+                  placeholder="Buscar REF o producto…"
+                  className="w-full pl-3 pr-7 py-1.5 rounded-lg text-xs outline-none"
+                  style={{ background: '#fff', border: '1.5px solid #8ab87a', color: '#1e3a14' }}
+                />
+                {filtroFc && (
+                  <button onClick={() => setFiltroFc('')}
+                    className="absolute right-2 text-gray-400 hover:text-gray-600">
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+              {filtroFc && (
+                <span className="text-xs" style={{ color: '#6a8a50' }}>
+                  {productos.filter(p => {
+                    const q = filtroFc.toLowerCase()
+                    return p.referencia.toLowerCase().includes(q) || (p.descripcion??'').toLowerCase().includes(q)
+                  }).length} resultado(s)
+                </span>
+              )}
               {fcImportMsg && (
                 <span className="text-xs px-2 py-0.5 rounded-lg flex items-center gap-1"
                   style={{ background: '#e8f5d0', border: '1px solid #8ab87a', color: '#2a6a1e' }}>
@@ -1259,6 +1478,10 @@ export default function PlaneacionPage() {
                 <button onClick={() => fcScroll(-1)}
                   className="px-2.5 py-1 rounded-lg text-sm font-bold transition-all hover:brightness-110"
                   style={{ background:'#c8e0a8', border:'1px solid #8ab87a', color:'#1e3a14' }}>←</button>
+                <button onClick={fcScrollToToday}
+                  className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all hover:brightness-110"
+                  style={{ background:'#1e3a14', border:'1px solid #8ab87a', color:'#7acc50' }}
+                  title="Ir a semana actual">Hoy</button>
                 <button onClick={() => fcScroll(1)}
                   className="px-2.5 py-1 rounded-lg text-sm font-bold transition-all hover:brightness-110"
                   style={{ background:'#c8e0a8', border:'1px solid #8ab87a', color:'#1e3a14' }}>→</button>
@@ -1297,11 +1520,11 @@ export default function PlaneacionPage() {
                   onMouseLeave={fcMouseLeave}
                   className="overflow-x-auto rounded-xl select-none shadow-sm"
                   style={{ border:'1px solid #a0c878', cursor:'grab', scrollbarWidth:'thin', scrollbarColor:'#8ab87a #d4e8b8' }}>
-                  <table className="text-xs" style={{ minWidth: `${200 + semanas.length * 252}px` }}>
+                  <table className="text-xs" style={{ minWidth: `${200 + semanas.length * 252}px`, borderCollapse: 'separate', borderSpacing: 0 }}>
                     <thead>
                       {/* Row 1: weeks */}
                       <tr style={{ background: '#1e3a14', borderBottom: '1px solid #2e5a20' }}>
-                        <th className="px-3 py-2 text-left sticky left-0 z-10 w-48" style={{ background: '#1e3a14', minWidth: 192 }}>
+                        <th className="px-3 py-2 text-left sticky left-0 z-20 w-48" style={{ background: '#1e3a14', minWidth: 240, borderRight: '2px solid #4a8a30', boxShadow: '3px 0 6px rgba(0,0,0,0.15)' }}>
                           <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#a3d982' }}>PRODUCTO</span>
                         </th>
                         {semanas.map(s => {
@@ -1316,7 +1539,7 @@ export default function PlaneacionPage() {
                       </tr>
                       {/* Row 2: sub-headers */}
                       <tr style={{ background: '#264a18', borderBottom: '2px solid #3a6228' }}>
-                        <th className="sticky left-0 z-10" style={{ background: '#264a18' }} />
+                        <th className="sticky left-0 z-20" style={{ background: '#264a18', borderRight: '2px solid #4a8a30', boxShadow: '3px 0 6px rgba(0,0,0,0.15)' }} />
                         {semanas.map(s => (
                           ['PEDIDO','PROD','SALDO'].map(h => (
                             <th key={`${s}_${h}`} className="px-2 py-1.5 text-center font-bold uppercase"
@@ -1333,17 +1556,20 @@ export default function PlaneacionPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {inventario.map((prod, pi) => {
+                      {inventario.filter(p => {
+                        if (!filtroFc) return true
+                        const q = filtroFc.toLowerCase()
+                        return p.referencia.toLowerCase().includes(q) || (p.descripcion??'').toLowerCase().includes(q)
+                      }).map((prod, pi) => {
                         const saldos = getSaldos(prod.referencia)
                         return (
                           <tr key={prod.referencia}
                             style={{ background: pi%2===0?'#ffffff':'#f0f7e4', borderBottom:'1px solid #d0e8b0' }}>
                             {/* Product name */}
                             <td className="px-3 py-2 sticky left-0 z-10"
-                              style={{ background: pi%2===0?'#ffffff':'#f0f7e4', minWidth: 192, borderRight: '1px solid #c0dca0' }}>
+                              style={{ background: pi%2===0?'#ffffff':'#f0f7e4', minWidth: 240, borderRight: '2px solid #8ab87a', boxShadow: '3px 0 6px rgba(0,0,0,0.08)' }}>
                               <div className="font-mono font-bold text-xs" style={{ color: '#1e5a3a' }}>{prod.referencia}</div>
-                              <div className="truncate" style={{ fontSize: '0.65rem', maxWidth: 170, color: '#5a7a42' }}
-                                title={prod.descripcion??''}>{prod.descripcion??'—'}</div>
+                              <div style={{ fontSize: '0.65rem', color: '#5a7a42' }}>{prod.descripcion??'—'}</div>
                             </td>
                             {semanas.map((s, si) => {
                               const key = `${prod.referencia}_${s}`
@@ -1352,8 +1578,15 @@ export default function PlaneacionPage() {
                               return (
                                 <>
                                   {/* PEDIDO */}
-                                  <td key={`${key}_p`} className="py-1.5 text-center"
+                                  <td key={`${key}_p`} className="py-1.5 text-center relative group/com"
                                     style={{ borderLeft: '1px solid #c0dca0', background: 'rgba(74,122,181,0.08)', minWidth: 84 }}>
+                                    {/* Comment triangle indicator */}
+                                    {comentarios[key] && (
+                                      <div className="absolute top-0 right-0 w-0 h-0 z-10"
+                                        style={{ borderStyle:'solid', borderWidth:'0 9px 9px 0', borderColor:'transparent #e8a030 transparent transparent' }}
+                                        title={`${comentarios[key].autor ? comentarios[key].autor + ': ' : ''}${comentarios[key].texto}`}
+                                      />
+                                    )}
                                     <input
                                       type="number"
                                       value={pedido || ''}
@@ -1364,6 +1597,19 @@ export default function PlaneacionPage() {
                                       onFocus={e => (e.target as HTMLInputElement).style.borderColor = '#4a7ab5'}
                                       onBlur={e => (e.target as HTMLInputElement).style.borderColor = 'transparent'}
                                     />
+                                    {/* Comment button */}
+                                    <button
+                                      onClick={() => {
+                                        const d = isoToDate(s)
+                                        setCommentModal({ key, ref: prod.referencia, semana: s, semLabel: `SEM ${getISOWeek(d)} · ${fmtShortDate(s)}` })
+                                        setCommentDraft(comentarios[key]?.texto ?? '')
+                                        setCommentAuthor(comentarios[key]?.autor ?? '')
+                                      }}
+                                      className="absolute bottom-0.5 right-0.5 opacity-0 group-hover/com:opacity-100 transition-opacity rounded"
+                                      style={{ padding: '1px 2px', color: comentarios[key] ? '#e8a030' : '#8ab87a', background: 'rgba(255,255,255,0.7)' }}
+                                      title="Agregar / editar comentario">
+                                      <MessageSquare size={9} />
+                                    </button>
                                   </td>
                                   {/* PROD */}
                                   <td key={`${key}_pr`} className="py-1.5 text-center"
@@ -1409,12 +1655,47 @@ export default function PlaneacionPage() {
         )}
 
         {/* ══════════════════════════════════════════════════
-            TAB 2 — PLAN MENSUAL
+            TAB 3 — PLAN MENSUAL
         ══════════════════════════════════════════════════ */}
-        {tab === 2 && (
+        {tab === 3 && (() => {
+          const mesActivoIdx = mesesDisponibles.indexOf(mesActivo)
+          const tresMeses = mesesDisponibles.slice(mesActivoIdx, mesActivoIdx + 2)
+          return (
           <div>
             <div className="flex items-center gap-3 mb-4 flex-wrap">
-              <h2 className="font-bold text-sm" style={{ color: '#1e3a14' }}>Plan Mensual — PROD del FORECAST por semana</h2>
+              <h2 className="font-bold text-sm" style={{ color: '#1e3a14' }}>Plan Mensual — PROYECTADO vs PEDIDO por semana</h2>
+              {/* Botón descargar */}
+              <div className="relative">
+                <button onClick={() => setPmExportMenu(v => !v)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:brightness-110"
+                  style={{ background: '#1e3a14', border: '1px solid #3a6228', color: '#a3d982' }}>
+                  <Download size={12} /> Descargar Excel
+                </button>
+                {pmExportMenu && (
+                  <div className="absolute left-0 top-full mt-1 rounded-xl shadow-xl z-50 overflow-hidden"
+                    style={{ background: '#f0faf0', border: '1px solid #b7ddb7', minWidth: 210 }}>
+                    <button className="w-full text-left px-4 py-2.5 text-xs font-medium hover:brightness-95 transition-colors"
+                      style={{ color: '#1e3a14' }}
+                      onClick={() => { exportarPlanMensual(tresMeses); setPmExportMenu(false) }}>
+                      Vista actual ({tresMeses.join(' + ')})
+                    </button>
+                    <div style={{ borderTop: '1px solid #c8e0a8' }} />
+                    {mesesDisponibles.map(mes => (
+                      <button key={mes} className="w-full text-left px-4 py-2.5 text-xs font-medium hover:brightness-95 transition-colors"
+                        style={{ color: '#1e3a14' }}
+                        onClick={() => { exportarPlanMensual([mes]); setPmExportMenu(false) }}>
+                        Solo {mes}
+                      </button>
+                    ))}
+                    <div style={{ borderTop: '1px solid #c8e0a8' }} />
+                    <button className="w-full text-left px-4 py-2.5 text-xs font-semibold hover:brightness-95 transition-colors"
+                      style={{ color: '#1e3a14' }}
+                      onClick={() => { exportarPlanMensual(mesesDisponibles); setPmExportMenu(false) }}>
+                      Todo el año ({new Date().getFullYear()})
+                    </button>
+                  </div>
+                )}
+              </div>
               <div className="flex gap-1.5 ml-auto flex-wrap">
                 {mesesDisponibles.map(mes => (
                   <button key={mes} onClick={() => setMesFiltro(mes)}
@@ -1430,60 +1711,165 @@ export default function PlaneacionPage() {
               </div>
             </div>
 
+            {/* Leyenda */}
+            <div className="flex items-center gap-4 mb-3 text-xs" style={{ color: '#5a7a42' }}>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm" style={{background:'#7040a8'}} /> PROY (del FORECAST)</span>
+              <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm" style={{background:'#4a7ab5'}} /> PED (pedido real)</span>
+            </div>
+
             {inventario.length === 0 ? (
               <div className="text-center py-16" style={{ color: '#6a8a50' }}>
                 <Calendar size={40} strokeWidth={1} className="mx-auto mb-3" />
-                <p className="text-sm">Primero importa el inventario y completa el FORECAST (columna PROD).</p>
+                <p className="text-sm">Primero importa el inventario y completa el FORECAST.</p>
               </div>
             ) : loadingPlan ? (
               <div className="flex items-center justify-center py-16">
                 <Loader2 size={28} className="animate-spin" style={{ color: '#3a7228' }} />
               </div>
             ) : (
-              <div className="overflow-x-auto rounded-xl shadow-sm" style={{ border: '1px solid #a0c878' }}>
-                <table className="text-xs" style={{ minWidth: `${200 + semanasDelMes.length * 100 + 100}px` }}>
+              <div
+                ref={pmScrollRef}
+                onMouseDown={pmMouseDown}
+                onMouseMove={pmMouseMove}
+                onMouseUp={pmMouseUp}
+                onMouseLeave={pmMouseLeave}
+                className="overflow-x-auto rounded-xl shadow-sm select-none"
+                style={{ border: '1px solid #a0c878', cursor: 'grab', scrollbarWidth: 'thin', scrollbarColor: '#8ab87a #d4e8b8' }}>
+                <table className="text-xs" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
                   <thead>
-                    <tr style={{ background: '#1e3a14', borderBottom: '2px solid #3a6228' }}>
-                      <th className="px-3 py-2.5 text-left sticky left-0 z-10 font-bold uppercase tracking-wide whitespace-nowrap"
-                        style={{ background: '#1e3a14', color: '#a3d982', fontSize: '0.65rem', minWidth: 192 }}>REF / PRODUCTO</th>
-                      {semanasDelMes.map(s => (
-                        <th key={s} className="px-3 py-2.5 text-center font-bold whitespace-nowrap"
-                          style={{ color: '#a3d982', borderLeft: '1px solid #3a6228', minWidth: 90 }}>
-                          SEM {getISOWeek(isoToDate(s))}<br />
-                          <span style={{ color: '#6a9850', fontSize: '0.6rem' }}>{fmtShortDate(s)}</span>
-                        </th>
-                      ))}
-                      <th className="px-3 py-2.5 text-center font-bold whitespace-nowrap"
-                        style={{ color: '#e8b870', borderLeft: '2px solid #5a7a20', minWidth: 90 }}>
-                        PROY MES
+                    {/* Row 1 — month groups */}
+                    <tr style={{ background: '#1e3a14' }}>
+                      <th rowSpan={3} className="px-3 py-2 text-left sticky left-0 z-20 font-bold uppercase tracking-wide"
+                        style={{ background: '#1e3a14', color: '#a3d982', fontSize: '0.65rem', minWidth: 240, borderRight: '1px solid #3a6228', verticalAlign: 'bottom' }}>
+                        REF / PRODUCTO
                       </th>
+                      {tresMeses.map((mes, mi) => {
+                        const semsM = semanasPorMes[mes] ?? []
+                        return (
+                          <th key={mes} colSpan={semsM.length * 2 + 2}
+                            className="px-3 py-2 text-center font-bold"
+                            style={{
+                              color: '#a3d982', fontSize: '0.7rem',
+                              borderLeft: mi > 0 ? '2px solid #4a8a30' : '1px solid #3a6228',
+                              borderBottom: '1px solid #3a6228',
+                            }}>
+                            {mes}
+                          </th>
+                        )
+                      })}
+                      <th rowSpan={3} className="px-3 py-2 text-center font-bold"
+                        style={{ color: '#e8c870', fontSize: '0.65rem', borderLeft: '2px solid #4a8a30', minWidth: 72, verticalAlign: 'bottom' }}>
+                        TOTAL<br/>PROY<br/>
+                        <span style={{ fontSize: '0.55rem', color: '#a09060' }}>2 meses</span>
+                      </th>
+                      <th rowSpan={3} className="px-3 py-2 text-center font-bold"
+                        style={{ color: '#7ab5e8', fontSize: '0.65rem', borderLeft: '1px solid #4a8a30', minWidth: 72, verticalAlign: 'bottom' }}>
+                        TOTAL<br/>PED<br/>
+                        <span style={{ fontSize: '0.55rem', color: '#6090b0' }}>2 meses</span>
+                      </th>
+                    </tr>
+                    {/* Row 2 — weeks (span 2) + PROY MES */}
+                    <tr style={{ background: '#1a3410' }}>
+                      {tresMeses.map((mes, mi) => {
+                        const semsM = semanasPorMes[mes] ?? []
+                        return [
+                          ...semsM.map((s, si) => {
+                            const d = isoToDate(s)
+                            return (
+                              <th key={s} colSpan={2} className="px-2 py-1.5 text-center font-semibold whitespace-nowrap"
+                                style={{
+                                  color: '#8ac870', fontSize: '0.6rem',
+                                  borderLeft: (mi > 0 && si === 0) ? '2px solid #4a8a30' : si === 0 ? '1px solid #3a6228' : 'none',
+                                  borderBottom: '1px solid #3a6228',
+                                }}>
+                                SEM {getISOWeek(d)}<br/>
+                                <span style={{ color: '#5a8850', fontSize: '0.55rem' }}>{fmtShortDate(s)}</span>
+                              </th>
+                            )
+                          }),
+                          <th key={`${mes}_pmh`} rowSpan={2} className="px-2 py-1 text-center font-bold"
+                            style={{ color: '#e8b870', fontSize: '0.6rem', borderLeft: '1px solid #4a8a30', minWidth: 68, verticalAlign: 'middle' }}>
+                            PROY<br/>MES
+                          </th>,
+                          <th key={`${mes}_pedmh`} rowSpan={2} className="px-2 py-1 text-center font-bold"
+                            style={{ color: '#7ab5e8', fontSize: '0.6rem', borderLeft: '1px solid #4a8a30', minWidth: 68, verticalAlign: 'middle' }}>
+                            PED<br/>MES
+                          </th>,
+                        ]
+                      })}
+                    </tr>
+                    {/* Row 3 — PROY / PED sub-cols */}
+                    <tr style={{ background: '#162c0e', borderBottom: '2px solid #3a6228' }}>
+                      {tresMeses.map((mes, mi) => {
+                        const semsM = semanasPorMes[mes] ?? []
+                        return semsM.flatMap((s, si) => [
+                          <th key={`${s}_proy`} className="px-1 py-1.5 text-center font-bold uppercase"
+                            style={{ color: '#c0a0e8', fontSize: '0.55rem', borderLeft: (mi > 0 && si === 0) ? '2px solid #4a8a30' : si === 0 ? '1px solid #3a6228' : 'none', minWidth: 60 }}>
+                            PROY
+                          </th>,
+                          <th key={`${s}_ped`} className="px-1 py-1.5 text-center font-bold uppercase"
+                            style={{ color: '#7ab5e8', fontSize: '0.55rem', minWidth: 60 }}>
+                            PED
+                          </th>,
+                        ])
+                      })}
                     </tr>
                   </thead>
                   <tbody>
                     {inventario.map((prod, pi) => {
-                      const weekProds = semanasDelMes.map(s => {
-                        const key = `${prod.referencia}_${s}`
-                        return planData[key]?.produccion ?? 0
+                      const rowBg = pi % 2 === 0 ? '#ffffff' : '#f0f7e4'
+                      const monthData = tresMeses.map(mes => {
+                        const semsM = semanasPorMes[mes] ?? []
+                        const weeks = semsM.map(s => {
+                          const key = `${prod.referencia}_${s}`
+                          return {
+                            s,
+                            proy: planData[key]?.pedido ?? 0,
+                            ped:  demandaOverride[`${prod.referencia}|${s}`] ?? 0,
+                          }
+                        })
+                        const proyMes = weeks.reduce((a, w) => a + w.proy, 0)
+                        const pedMes  = weeks.reduce((a, w) => a + w.ped,  0)
+                        return { mes, weeks, proyMes, pedMes }
                       })
-                      const proyMes = weekProds.reduce((a, b) => a + b, 0)
+                      const grandTotal    = monthData.reduce((a, m) => a + m.proyMes, 0)
+                      const grandTotalPed = monthData.reduce((a, m) => a + m.pedMes,  0)
 
                       return (
-                        <tr key={prod.referencia}
-                          style={{ background: pi%2===0?'#ffffff':'#f0f7e4', borderBottom:'1px solid #d0e8b0' }}>
+                        <tr key={prod.referencia} style={{ background: rowBg, borderBottom: '1px solid #d0e8b0' }}>
                           <td className="px-3 py-2 sticky left-0 z-10"
-                            style={{ background: pi%2===0?'#ffffff':'#f0f7e4', borderRight: '1px solid #c0dca0', minWidth: 192 }}>
+                            style={{ background: rowBg, borderRight: '1px solid #c0dca0', minWidth: 240 }}>
                             <div className="font-mono font-bold text-xs" style={{ color: '#1e5a3a' }}>{prod.referencia}</div>
-                            <div className="truncate" style={{ fontSize: '0.65rem', maxWidth: 170, color: '#5a7a42' }}>{prod.descripcion??'—'}</div>
+                            <div style={{ fontSize: '0.65rem', color: '#5a7a42' }}>{prod.descripcion??'—'}</div>
                           </td>
-                          {weekProds.map((val, wi) => (
-                            <td key={semanasDelMes[wi]} className="px-3 py-2 text-center font-mono"
-                              style={{ borderLeft: '1px solid #d0e8b0', color: val > 0 ? '#2a6a1e' : '#c0ceb0' }}>
-                              {val > 0 ? val.toLocaleString('es-CO') : '—'}
-                            </td>
-                          ))}
-                          <td className="px-3 py-2 text-center font-mono font-bold"
-                            style={{ borderLeft: '2px solid #a0c878', color: proyMes > 0 ? '#a06828' : '#c0ceb0' }}>
-                            {proyMes > 0 ? proyMes.toLocaleString('es-CO') : '—'}
+                          {monthData.map(({ mes, weeks, proyMes, pedMes }, mi) => [
+                            ...weeks.flatMap(({ s, proy, ped }, si) => [
+                              <td key={`${s}_proy`} className="px-2 py-1.5 text-center font-mono"
+                                style={{ borderLeft: (mi > 0 && si === 0) ? '2px solid #b0d890' : si === 0 ? '1px solid #d0e8b0' : 'none',
+                                  color: proy > 0 ? '#7040a8' : '#c0ceb0' }}>
+                                {proy > 0 ? proy.toLocaleString('es-CO') : '—'}
+                              </td>,
+                              <td key={`${s}_ped`} className="px-2 py-1.5 text-center font-mono"
+                                style={{ color: ped > 0 ? '#2a5a8a' : '#c0ceb0' }}>
+                                {ped > 0 ? ped.toLocaleString('es-CO') : '—'}
+                              </td>,
+                            ]),
+                            <td key={`${mes}_pm`} className="px-2 py-1.5 text-center font-mono font-bold"
+                              style={{ borderLeft: '1px solid #c0dca0', color: proyMes > 0 ? '#a06828' : '#c0ceb0', background: 'rgba(160,104,40,0.06)' }}>
+                              {proyMes > 0 ? proyMes.toLocaleString('es-CO') : '—'}
+                            </td>,
+                            <td key={`${mes}_pedm`} className="px-2 py-1.5 text-center font-mono font-bold"
+                              style={{ borderLeft: '1px solid #c0dca0', color: pedMes > 0 ? '#2a5a8a' : '#c0ceb0', background: 'rgba(74,122,181,0.06)' }}>
+                              {pedMes > 0 ? pedMes.toLocaleString('es-CO') : '—'}
+                            </td>,
+                          ])}
+                          <td className="px-2 py-1.5 text-center font-mono font-bold"
+                            style={{ borderLeft: '2px solid #a0c878', color: grandTotal > 0 ? '#1a5a10' : '#c0ceb0', background: 'rgba(30,58,20,0.06)' }}>
+                            {grandTotal > 0 ? grandTotal.toLocaleString('es-CO') : '—'}
+                          </td>
+                          <td className="px-2 py-1.5 text-center font-mono font-bold"
+                            style={{ borderLeft: '1px solid #a0c878', color: grandTotalPed > 0 ? '#2a5a8a' : '#c0ceb0', background: 'rgba(74,122,181,0.06)' }}>
+                            {grandTotalPed > 0 ? grandTotalPed.toLocaleString('es-CO') : '—'}
                           </td>
                         </tr>
                       )
@@ -1493,12 +1879,13 @@ export default function PlaneacionPage() {
               </div>
             )}
           </div>
-        )}
+          )
+        })()}
 
         {/* ══════════════════════════════════════════════════
-            TAB 3 — ACTIVIDADES
+            TAB 5 — ACTIVIDADES (header)
         ══════════════════════════════════════════════════ */}
-        {tab === 3 && (
+        {tab === 5 && (
           <div className="rounded-2xl p-4" style={{ background: '#edf7ed', border: '1px solid #b7ddb7' }}>
 
             {/* Toolbar */}
@@ -1567,29 +1954,69 @@ export default function PlaneacionPage() {
               />
             )}
 
-            {/* ── Modal agregar producto manual ── */}
-            {modalAddAct && (
-              <ModalAgregarProducto
-                onClose={() => setModalAddAct(false)}
-                onSave={guardarProductoManual}
-              />
-            )}
           </div>
         )}
 
         {/* ══════════════════════════════════════════════════
-            TAB 4 — PLAN DIARIO
+            TAB 2 — PLAN DIARIO
         ══════════════════════════════════════════════════ */}
-        {tab === 4 && (() => {
+        {tab === 2 && (() => {
           const dias = getDias(semDiario)
           // All refs that have activities, filtered to those in inventario
-          const refsConAct = Object.keys(actPorRef).filter(r => actPorRef[r]?.length > 0)
+          const refsConActAll = Object.keys(actPorRef).filter(r => actPorRef[r]?.length > 0)
+          const refsConAct = refsConActAll.filter(r => {
+            if (filtroDiario) {
+              const q = filtroDiario.toLowerCase()
+              if (!r.toLowerCase().includes(q) && !(actPorRef[r][0]?.descripcion_producto ?? '').toLowerCase().includes(q))
+                return false
+            }
+            if (diaFiltro) {
+              return (planDiario[`${r}||${diaFiltro}`] ?? 0) > 0
+            }
+            return true
+          })
 
           return (
             <div>
               {/* Navigator */}
               <div className="flex items-center gap-3 mb-4 flex-wrap">
                 <h2 className="font-bold text-sm" style={{ color: '#1e3a14' }}>Plan Diario de Producción</h2>
+                {/* Buscador */}
+                <div className="relative flex items-center" style={{ minWidth: 220 }}>
+                  <input
+                    type="text"
+                    value={filtroDiario}
+                    onChange={e => setFiltroDiario(e.target.value)}
+                    placeholder="Buscar REF o producto…"
+                    className="w-full pl-3 pr-7 py-1.5 rounded-lg text-xs outline-none"
+                    style={{ background: '#fff', border: '1.5px solid #8ab87a', color: '#1e3a14' }}
+                  />
+                  {filtroDiario && (
+                    <button onClick={() => setFiltroDiario('')}
+                      className="absolute right-2 text-gray-400 hover:text-gray-600">
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+                {/* Filtro por día */}
+                <div className="flex items-center gap-1">
+                  <span className="text-xs mr-1" style={{ color: '#6a8a50' }}>Filtrar día:</span>
+                  {dias.map(d => (
+                    <button key={d} onClick={() => setDiaFiltro(diaFiltro === d ? null : d)}
+                      className="px-2 py-1 rounded text-xs font-semibold transition-all"
+                      style={diaFiltro === d
+                        ? { background: '#1e3a14', border: '1px solid #3a6228', color: '#7acc50' }
+                        : { background: '#c8e0a8', border: '1px solid #8ab87a', color: '#3a5a20' }}>
+                      {diaCorto(d)}<br/>
+                      <span style={{ fontSize: '0.55rem', opacity: 0.8 }}>{fmtDMM(d)}</span>
+                    </button>
+                  ))}
+                </div>
+                {diaFiltro && (
+                  <span className="text-xs" style={{ color: '#6a8a50' }}>
+                    {refsConAct.length} ref{refsConAct.length !== 1 ? 's' : ''}
+                  </span>
+                )}
                 <div className="flex items-center gap-2 ml-auto">
                   <button onClick={() => { const s = prevSem(semDiario); setSemDiario(s); }}
                     className="px-2 py-1 rounded text-xs font-bold hover:brightness-110"
@@ -1729,19 +2156,48 @@ export default function PlaneacionPage() {
         })()}
 
         {/* ══════════════════════════════════════════════════
-            TAB 5 — DEMANDA SEMANAL
+            TAB 1 — DEMANDA SEMANAL
         ══════════════════════════════════════════════════ */}
-        {tab === 5 && (
+        {tab === 1 && (
           <div>
             <div className="flex items-center gap-3 mb-4 flex-wrap">
               <h2 className="font-bold text-sm" style={{ color: '#1e3a14' }}>Demanda Semanal</h2>
               <span className="text-xs" style={{ color: '#6a8a50' }}>
                 {new Date().getFullYear()} · {semanas.length} semanas
               </span>
+              {/* Buscador */}
+              <div className="relative flex items-center" style={{ minWidth: 220 }}>
+                <input
+                  type="text"
+                  value={filtroDemanda}
+                  onChange={e => setFiltroDemanda(e.target.value)}
+                  placeholder="Buscar REF o producto…"
+                  className="w-full pl-3 pr-7 py-1.5 rounded-lg text-xs outline-none"
+                  style={{ background: '#fff', border: '1.5px solid #8ab87a', color: '#1e3a14' }}
+                />
+                {filtroDemanda && (
+                  <button onClick={() => setFiltroDemanda('')}
+                    className="absolute right-2 text-gray-400 hover:text-gray-600">
+                    <X size={12} />
+                  </button>
+                )}
+              </div>
+              {filtroDemanda && (
+                <span className="text-xs" style={{ color: '#6a8a50' }}>
+                  {inventario.filter(p => {
+                    const q = filtroDemanda.toLowerCase()
+                    return p.referencia.toLowerCase().includes(q) || (p.descripcion??'').toLowerCase().includes(q)
+                  }).length} resultado(s)
+                </span>
+              )}
               <div className="ml-auto flex items-center gap-2">
                 <button onClick={() => dmScroll(-1)}
                   className="px-2.5 py-1 rounded-lg text-sm font-bold transition-all hover:brightness-110"
                   style={{ background:'#c8e0a8', border:'1px solid #8ab87a', color:'#1e3a14' }}>←</button>
+                <button onClick={dmScrollToToday}
+                  className="px-2.5 py-1 rounded-lg text-xs font-bold transition-all hover:brightness-110"
+                  style={{ background:'#1e3a14', border:'1px solid #8ab87a', color:'#7acc50' }}
+                  title="Ir a semana actual">Hoy</button>
                 <button onClick={() => dmScroll(1)}
                   className="px-2.5 py-1 rounded-lg text-sm font-bold transition-all hover:brightness-110"
                   style={{ background:'#c8e0a8', border:'1px solid #8ab87a', color:'#1e3a14' }}>→</button>
@@ -1778,12 +2234,15 @@ export default function PlaneacionPage() {
                 onMouseLeave={dmMouseLeave}
                 className="overflow-x-auto rounded-xl select-none shadow-sm"
                 style={{ border:'1px solid #a0c878', cursor:'grab', scrollbarWidth:'thin', scrollbarColor:'#8ab87a #d4e8b8' }}>
-                <table className="text-xs" style={{ minWidth: `${200 + semanas.length * 336}px` }}>
+                <table className="text-xs" style={{ minWidth: `${312 + semanas.length * 336}px`, borderCollapse: 'separate', borderSpacing: 0 }}>
                   <thead>
                     {/* Row 1: semanas */}
                     <tr style={{ background: '#1e3a14', borderBottom: '1px solid #2e5a20' }}>
-                      <th className="px-3 py-2 text-left sticky left-0 z-10" style={{ background: '#1e3a14', minWidth: 192 }}>
+                      <th className="px-3 py-2 text-left sticky left-0 z-20" style={{ background: '#1e3a14', minWidth: 240 }}>
                         <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#a3d982' }}>PRODUCTO</span>
+                      </th>
+                      <th className="px-2 py-2 text-center sticky z-20" style={{ background: '#1e3a14', minWidth: 72, left: 240, borderRight: '2px solid #4a8a30', boxShadow: '3px 0 6px rgba(0,0,0,0.15)' }}>
+                        <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#e8b870' }}>INV.</span>
                       </th>
                       {semanas.map(s => {
                         const d = isoToDate(s)
@@ -1797,7 +2256,8 @@ export default function PlaneacionPage() {
                     </tr>
                     {/* Row 2: sub-headers */}
                     <tr style={{ background: '#264a18', borderBottom: '2px solid #3a6228' }}>
-                      <th className="sticky left-0 z-10" style={{ background: '#264a18' }} />
+                      <th className="sticky left-0 z-20" style={{ background: '#264a18' }} />
+                      <th className="sticky z-20" style={{ background: '#264a18', left: 240, borderRight: '2px solid #4a8a30', boxShadow: '3px 0 6px rgba(0,0,0,0.15)', minWidth: 72 }} />
                       {semanas.map(s => (
                         ['PROYECTADO','PEDIDO','PROD','SALDO'].map(h => (
                           <th key={`${s}_${h}`} className="px-2 py-1.5 text-center font-bold uppercase"
@@ -1814,7 +2274,11 @@ export default function PlaneacionPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {inventario.map((prod, pi) => {
+                    {inventario.filter(p => {
+                      if (!filtroDemanda) return true
+                      const q = filtroDemanda.toLowerCase()
+                      return p.referencia.toLowerCase().includes(q) || (p.descripcion??'').toLowerCase().includes(q)
+                    }).map((prod, pi) => {
                       const ref = prod.referencia
                       const saldos = getSaldosDemanda(ref)
                       const rowBg = pi % 2 === 0 ? '#ffffff' : '#f0f7e4'
@@ -1822,10 +2286,16 @@ export default function PlaneacionPage() {
                         <tr key={ref} style={{ background: rowBg, borderBottom:'1px solid #d0e8b0' }}>
                           {/* Producto */}
                           <td className="px-3 py-2 sticky left-0 z-10"
-                            style={{ background: rowBg, minWidth: 192, borderRight: '1px solid #c0dca0' }}>
+                            style={{ background: rowBg, minWidth: 240 }}>
                             <div className="font-mono font-bold text-xs" style={{ color: '#1e5a3a' }}>{ref}</div>
-                            <div className="truncate" style={{ fontSize: '0.65rem', maxWidth: 170, color: '#5a7a42' }}
-                              title={prod.descripcion??''}>{prod.descripcion??'—'}</div>
+                            <div style={{ fontSize: '0.65rem', color: '#5a7a42' }}>{prod.descripcion??'—'}</div>
+                          </td>
+                          {/* Inventario actual */}
+                          <td className="px-2 py-1.5 text-center font-mono font-bold text-xs sticky z-10"
+                            style={{ background: rowBg, left: 240, minWidth: 72,
+                              color: (prod.existencia ?? 0) > 0 ? '#2a6a1e' : '#c04030',
+                              borderRight: '2px solid #8ab87a', boxShadow: '3px 0 6px rgba(0,0,0,0.08)' }}>
+                            {(prod.existencia ?? 0) > 0 ? (prod.existencia).toLocaleString('es-CO') : '—'}
                           </td>
                           {semanas.map((s, si) => {
                             const planKey = `${ref}_${s}`
@@ -1843,8 +2313,14 @@ export default function PlaneacionPage() {
                                   {proyectado > 0 ? proyectado.toLocaleString('es-CO') : '—'}
                                 </td>
                                 {/* PEDIDO (editable manual) */}
-                                <td key={`${s}_ped`} className="py-1.5 text-center"
+                                <td key={`${s}_ped`} className="py-1.5 text-center relative group/com"
                                   style={{ background:'rgba(74,122,181,0.08)', minWidth: 84 }}>
+                                  {comentarios[planKey] && (
+                                    <div className="absolute top-0 right-0 w-0 h-0 z-10"
+                                      style={{ borderStyle:'solid', borderWidth:'0 9px 9px 0', borderColor:'transparent #e8a030 transparent transparent' }}
+                                      title={`${comentarios[planKey].autor ? comentarios[planKey].autor + ': ' : ''}${comentarios[planKey].texto}`}
+                                    />
+                                  )}
                                   <input
                                     type="number" min={0}
                                     value={pedido || ''}
@@ -1855,6 +2331,18 @@ export default function PlaneacionPage() {
                                     onFocus={e => (e.target as HTMLInputElement).style.borderColor = '#4a7ab5'}
                                     onBlur={e => (e.target as HTMLInputElement).style.borderColor = 'transparent'}
                                   />
+                                  <button
+                                    onClick={() => {
+                                      const d = isoToDate(s)
+                                      setCommentModal({ key: planKey, ref, semana: s, semLabel: `SEM ${getISOWeek(d)} · ${fmtShortDate(s)}` })
+                                      setCommentDraft(comentarios[planKey]?.texto ?? '')
+                                      setCommentAuthor(comentarios[planKey]?.autor ?? '')
+                                    }}
+                                    className="absolute bottom-0.5 right-0.5 opacity-0 group-hover/com:opacity-100 transition-opacity rounded"
+                                    style={{ padding: '1px 2px', color: comentarios[planKey] ? '#e8a030' : '#8ab87a', background: 'rgba(255,255,255,0.7)' }}
+                                    title="Agregar / editar comentario">
+                                    <MessageSquare size={9} />
+                                  </button>
                                 </td>
                                 {/* PROD */}
                                 <td key={`${s}_prod`} className="px-2 py-1.5 text-center font-mono text-xs"
@@ -1887,6 +2375,97 @@ export default function PlaneacionPage() {
         )}
 
       </div>
+
+      {/* ── Modal agregar producto ───────────────────────────────────────── */}
+      {modalAddAct && (
+        <ModalAgregarProducto
+          onClose={() => setModalAddAct(false)}
+          onSave={guardarProductoManual}
+        />
+      )}
+
+      {/* ── Modal comentario ─────────────────────────────────────────────── */}
+      {commentModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.55)' }}
+          onClick={e => { if (e.target === e.currentTarget) setCommentModal(null) }}>
+          <div className="rounded-2xl shadow-2xl w-full max-w-sm mx-4" style={{ background: '#f0faf0', border: '1px solid #8ab87a' }}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-3 rounded-t-2xl" style={{ background: '#1e3a14', borderBottom: '1px solid #3a6228' }}>
+              <div>
+                <div className="font-bold text-sm" style={{ color: '#a3d982' }}>Comentario</div>
+                <div className="text-xs mt-0.5" style={{ color: '#6a9a50' }}>
+                  {commentModal.ref} · {commentModal.semLabel}
+                </div>
+              </div>
+              <button onClick={() => setCommentModal(null)} style={{ color: '#6a9a50' }}><X size={16} /></button>
+            </div>
+            {/* Body */}
+            <div className="px-5 py-4 flex flex-col gap-3">
+              <div>
+                <label className="block text-xs font-semibold mb-1" style={{ color: '#2a5a1e' }}>Autor (opcional)</label>
+                <input
+                  type="text"
+                  value={commentAuthor}
+                  onChange={e => setCommentAuthor(e.target.value)}
+                  placeholder="Nombre de quien escribe…"
+                  className="w-full rounded-lg px-3 py-1.5 text-sm focus:outline-none"
+                  style={{ border: '1px solid #8ab87a', background: '#ffffff', color: '#1a3010' }}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold mb-1" style={{ color: '#2a5a1e' }}>Comentario</label>
+                <textarea
+                  value={commentDraft}
+                  onChange={e => setCommentDraft(e.target.value)}
+                  placeholder="Escribe el comentario aquí…"
+                  rows={4}
+                  className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none resize-none"
+                  style={{ border: '1px solid #8ab87a', background: '#ffffff', color: '#1a3010' }}
+                  autoFocus
+                />
+              </div>
+              {comentarios[commentModal.key] && (
+                <div className="text-xs rounded-lg px-3 py-2" style={{ background: '#fff8e8', border: '1px solid #e8c870', color: '#7a5820' }}>
+                  <span className="font-semibold">Comentario actual:</span>{' '}
+                  {comentarios[commentModal.key].autor && <span className="font-medium">{comentarios[commentModal.key].autor}: </span>}
+                  {comentarios[commentModal.key].texto}
+                </div>
+              )}
+            </div>
+            {/* Footer */}
+            <div className="flex items-center justify-between px-5 pb-4">
+              <button
+                onClick={async () => {
+                  setSavingComment(true)
+                  await fetch(`/api/planeacion/comentarios?referencia=${commentModal.ref}&semana_inicio=${commentModal.semana}`, { method: 'DELETE' })
+                  setComentarios(prev => { const n = {...prev}; delete n[commentModal.key]; return n })
+                  setSavingComment(false)
+                  setCommentModal(null)
+                }}
+                disabled={!comentarios[commentModal.key] || savingComment}
+                className="text-xs px-3 py-1.5 rounded-lg disabled:opacity-40"
+                style={{ background: '#fce8e8', border: '1px solid #e8a0a0', color: '#b03030' }}>
+                Eliminar
+              </button>
+              <div className="flex gap-2">
+                <button onClick={() => setCommentModal(null)}
+                  className="text-xs px-3 py-1.5 rounded-lg"
+                  style={{ background: '#e0ead8', border: '1px solid #a0c080', color: '#4a6a30' }}>
+                  Cancelar
+                </button>
+                <button
+                  onClick={guardarComentario}
+                  disabled={savingComment}
+                  className="text-xs px-4 py-1.5 rounded-lg font-semibold disabled:opacity-50 flex items-center gap-1.5"
+                  style={{ background: '#1e3a14', color: '#a3d982' }}>
+                  {savingComment ? <Loader2 size={11} className="animate-spin" /> : null}
+                  Guardar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }

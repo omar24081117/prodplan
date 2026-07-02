@@ -45,7 +45,9 @@ type Registro = {
 type Override = {
   hora_ingreso: string
   salida_efectiva: string
-  horas_extra_manual?: number  // Si se define, ignora el cálculo por horario
+  horas_extra_manual?: number      // Horas extra diurnas manuales
+  horas_nocturnas_manual?: number  // Horas extra nocturnas manuales
+  recargo_nocturno_manual?: number // Recargo nocturno manual adicional
 }
 
 const toMins = (t: string) => {
@@ -56,9 +58,15 @@ const toMins = (t: string) => {
 
 function calcConOverride(r: Registro, ov: Override) {
   // ── Modo jornada adicional: horas extra ingresadas directamente ──
-  if (ov.horas_extra_manual !== undefined && ov.horas_extra_manual > 0) {
-    const minExtra = Math.round(ov.horas_extra_manual * 60)
-    return { minutos_extra: minExtra, horas_extra: ov.horas_extra_manual, horas_recargo: 0 }
+  const tieneManualDiurno = (ov.horas_extra_manual ?? 0) > 0
+  const tieneManualNocturno = (ov.horas_nocturnas_manual ?? 0) > 0
+  if (tieneManualDiurno || tieneManualNocturno) {
+    const minExtra = Math.round((ov.horas_extra_manual ?? 0) * 60)
+    return {
+      minutos_extra: minExtra,
+      horas_extra: ov.horas_extra_manual ?? 0,
+      horas_recargo: ov.recargo_nocturno_manual ?? 0,
+    }
   }
 
   // ── Modo normal: calcular desde salida efectiva vs salida norm ──
@@ -96,17 +104,24 @@ function TurnoManualModal({
   onClose: () => void
   onGuardar: (cedula: string, ov: Override) => void
 }) {
-  const tieneManual = (overrideActual?.horas_extra_manual ?? 0) > 0
-  const [modo,          setModo]          = useState<'horario' | 'adicional'>(tieneManual ? 'adicional' : 'horario')
-  const [horaIngreso,   setHoraIngreso]   = useState(overrideActual?.hora_ingreso    ?? registro.hora_ingreso    ?? '')
-  const [salidaEfec,    setSalidaEfec]    = useState(overrideActual?.salida_efectiva ?? registro.salida_efectiva ?? registro.hora_salida ?? '')
-  const [hsExtManual,   setHsExtManual]   = useState(overrideActual?.horas_extra_manual?.toString() ?? '')
+  const tieneManual = ((overrideActual?.horas_extra_manual ?? 0) > 0) || ((overrideActual?.horas_nocturnas_manual ?? 0) > 0)
+  const [modo,            setModo]            = useState<'horario' | 'adicional'>(tieneManual ? 'adicional' : 'horario')
+  const [horaIngreso,     setHoraIngreso]     = useState(overrideActual?.hora_ingreso    ?? registro.hora_ingreso    ?? '')
+  const [salidaEfec,      setSalidaEfec]      = useState(overrideActual?.salida_efectiva ?? registro.salida_efectiva ?? registro.hora_salida ?? '')
+  const [hsExtManual,     setHsExtManual]     = useState(overrideActual?.horas_extra_manual?.toString()     ?? '')
+  const [hsNocManual,     setHsNocManual]     = useState(overrideActual?.horas_nocturnas_manual?.toString() ?? '')
+  const [hsRecNocManual,  setHsRecNocManual]  = useState(overrideActual?.recargo_nocturno_manual?.toString() ?? '')
 
   const previewHorario = modo === 'horario' && salidaEfec && registro.salida_norm
     ? calcConOverride(registro, { hora_ingreso: horaIngreso, salida_efectiva: salidaEfec })
     : null
-  const previewManual = modo === 'adicional' && hsExtManual
-    ? { horas_extra: parseFloat(hsExtManual) || 0, minutos_extra: Math.round((parseFloat(hsExtManual) || 0) * 60), horas_recargo: 0 }
+  const previewManual = modo === 'adicional' && (hsExtManual || hsNocManual)
+    ? {
+        horas_extra:    parseFloat(hsExtManual)    || 0,
+        minutos_extra:  Math.round((parseFloat(hsExtManual) || 0) * 60),
+        horas_nocturnas: parseFloat(hsNocManual)   || 0,
+        horas_recargo:  parseFloat(hsRecNocManual) || 0,
+      }
     : null
   const preview = previewHorario ?? previewManual
 
@@ -116,7 +131,9 @@ function TurnoManualModal({
       onGuardar(registro.cedula, {
         hora_ingreso: horaIngreso || registro.hora_ingreso || '',
         salida_efectiva: '',
-        horas_extra_manual: parseFloat(hsExtManual) || 0,
+        horas_extra_manual:      parseFloat(hsExtManual)    || 0,
+        horas_nocturnas_manual:  parseFloat(hsNocManual)    || undefined,
+        recargo_nocturno_manual: parseFloat(hsRecNocManual) || undefined,
       })
     } else {
       onGuardar(registro.cedula, { hora_ingreso: horaIngreso, salida_efectiva: salidaEfec })
@@ -182,22 +199,49 @@ function TurnoManualModal({
               </div>
             </div>
           ) : (
-            <div>
-              <label className="text-xs text-gray-400 block mb-1">
-                Horas extra <span className="text-amber-400">(jornada adicional no programada)</span>
-              </label>
-              <div className="flex items-center gap-2">
-                <input type="number" step="0.25" min="0.25" max="24" required
-                  placeholder="Ej: 8 o 4.5"
-                  value={hsExtManual}
-                  onChange={e => setHsExtManual(e.target.value)}
-                  className="flex-1 bg-gray-800 border border-amber-700 text-white rounded-lg px-3 py-2.5 text-lg font-mono font-bold focus:outline-none focus:border-amber-400 text-center"
-                />
-                <span className="text-gray-400 text-sm font-semibold">horas</span>
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">
+                  Horas extra <span className="text-amber-400">diurnas</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input type="number" step="0.25" min="0" max="24"
+                    placeholder="0"
+                    value={hsExtManual}
+                    onChange={e => setHsExtManual(e.target.value)}
+                    className="flex-1 bg-gray-800 border border-amber-700 text-white rounded-lg px-3 py-2 text-base font-mono font-bold focus:outline-none focus:border-amber-400 text-center"
+                  />
+                  <span className="text-gray-400 text-sm font-semibold">h</span>
+                </div>
               </div>
-              <p className="text-gray-600 text-xs mt-1.5">
-                Ingresa las horas trabajadas en el día adicional. El sistema las registra como horas extra directas.
-              </p>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">
+                  Horas extra <span className="text-violet-400">nocturnas</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input type="number" step="0.25" min="0" max="24"
+                    placeholder="0"
+                    value={hsNocManual}
+                    onChange={e => setHsNocManual(e.target.value)}
+                    className="flex-1 bg-gray-800 border border-violet-700 text-white rounded-lg px-3 py-2 text-base font-mono font-bold focus:outline-none focus:border-violet-400 text-center"
+                  />
+                  <span className="text-gray-400 text-sm font-semibold">h</span>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">
+                  Recargo nocturno <span className="text-red-400">manual</span>
+                </label>
+                <div className="flex items-center gap-2">
+                  <input type="number" step="0.25" min="0" max="24"
+                    placeholder="0"
+                    value={hsRecNocManual}
+                    onChange={e => setHsRecNocManual(e.target.value)}
+                    className="flex-1 bg-gray-800 border border-red-800 text-white rounded-lg px-3 py-2 text-base font-mono font-bold focus:outline-none focus:border-red-500 text-center"
+                  />
+                  <span className="text-gray-400 text-sm font-semibold">h</span>
+                </div>
+              </div>
             </div>
           )}
 
@@ -205,15 +249,23 @@ function TurnoManualModal({
           {preview && (
             <div className="rounded-lg p-3 text-xs" style={{ background: '#0f172a', border: '1px solid #1e293b' }}>
               <p className="text-gray-400 mb-1.5 font-semibold uppercase tracking-wide text-xs">Vista previa</p>
-              <div className="flex gap-4">
+              <div className="flex gap-4 flex-wrap">
                 <div>
                   <p className="text-gray-500">Min extra</p>
                   <p className="font-bold" style={{ color: preview.minutos_extra > 0 ? '#fdba74' : '#475569' }}>{preview.minutos_extra} min</p>
                 </div>
                 <div>
-                  <p className="text-gray-500">Hrs extra</p>
+                  <p className="text-gray-500">Hrs diurnas</p>
                   <p className="font-bold" style={{ color: preview.horas_extra > 0 ? '#fdba74' : '#475569' }}>{preview.horas_extra.toFixed(2)} h</p>
                 </div>
+                {'horas_nocturnas' in preview && (
+                  <div>
+                    <p className="text-gray-500">Hrs nocturnas</p>
+                    <p className="font-bold" style={{ color: (preview as {horas_nocturnas:number}).horas_nocturnas > 0 ? '#c4b5fd' : '#475569' }}>
+                      {(preview as {horas_nocturnas:number}).horas_nocturnas.toFixed(2)} h
+                    </p>
+                  </div>
+                )}
                 <div>
                   <p className="text-gray-500">Recargo noct.</p>
                   <p className="font-bold" style={{ color: preview.horas_recargo > 0 ? '#fca5a5' : '#475569' }}>{preview.horas_recargo.toFixed(2)} h</p>
@@ -485,11 +537,13 @@ export default function HorasExtraPage() {
     // Overrides guardados
     const ovMap: Record<string, Override> = {}
     for (const ov of dataOv) {
-      if (ov.hora_ingreso || ov.salida_efectiva || ov.horas_extra_manual) {
+      if (ov.hora_ingreso || ov.salida_efectiva || ov.horas_extra_manual || ov.horas_nocturnas_manual) {
         ovMap[ov.cedula] = {
-          hora_ingreso:       ov.hora_ingreso       ?? '',
-          salida_efectiva:    ov.salida_efectiva    ?? '',
-          horas_extra_manual: ov.horas_extra_manual ?? undefined,
+          hora_ingreso:            ov.hora_ingreso            ?? '',
+          salida_efectiva:         ov.salida_efectiva         ?? '',
+          horas_extra_manual:      ov.horas_extra_manual      ?? undefined,
+          horas_nocturnas_manual:  ov.horas_nocturnas_manual  ?? undefined,
+          recargo_nocturno_manual: ov.recargo_nocturno_manual ?? undefined,
         }
       }
     }
@@ -675,10 +729,10 @@ export default function HorasExtraPage() {
             <thead>
               <tr style={{ background: '#020617', borderBottom: '2px solid #1e293b' }}>
                 {[
-                  ['NOMBRE','w-[14%]'],['CÉDULA','w-[9%]'],['TRN','w-[5%]'],
+                  ['NOMBRE','w-[12%]'],['CÉDULA','w-[8%]'],['TRN','w-[5%]'],
                   ['ENT.','w-[5%]'],['E.N.','w-[5%]'],['SAL.','w-[5%]'],
                   ['S.N.','w-[5%]'],['S.EFEC.','w-[6%]'],
-                  ['MIN+','w-[6%]'],['HRS+','w-[6%]'],['REC.','w-[6%]'],
+                  ['MIN+','w-[5%]'],['HRS+','w-[5%]'],['HRS NOC.','w-[6%]'],['REC.','w-[5%]'],
                   ['ESTADO','w-[9%]'],['ACCIÓN','w-[14%]'],
                 ].map(([h, w]) => (
                   <th key={h} className={`px-2 py-2.5 text-left font-bold uppercase tracking-wide whitespace-nowrap ${w}`} style={{ color: '#64748b', fontSize: '0.65rem' }}>
@@ -752,6 +806,15 @@ export default function HorasExtraPage() {
                     <td className="px-2 py-2 text-center">
                       {r.horas_extra > 0
                         ? <span className="inline-block px-1.5 py-0.5 rounded font-bold" style={{ background: '#451a03', color: '#fed7aa' }}>{r.horas_extra.toFixed(2)}</span>
+                        : <span className="text-slate-700">—</span>}
+                    </td>
+
+                    {/* HRS NOC. */}
+                    <td className="px-2 py-2 text-center">
+                      {(overrides[r.cedula]?.horas_nocturnas_manual ?? 0) > 0
+                        ? <span className="inline-block px-1.5 py-0.5 rounded font-bold" style={{ background: '#1e1040', color: '#c4b5fd' }}>
+                            {(overrides[r.cedula]!.horas_nocturnas_manual!).toFixed(2)}
+                          </span>
                         : <span className="text-slate-700">—</span>}
                     </td>
 
@@ -955,9 +1018,11 @@ export default function HorasExtraPage() {
               body: JSON.stringify({
                 cedula,
                 fecha,
-                hora_ingreso:       ov.hora_ingreso       || null,
-                salida_efectiva:    ov.salida_efectiva    || null,
-                horas_extra_manual: ov.horas_extra_manual ?? null,
+                hora_ingreso:            ov.hora_ingreso            || null,
+                salida_efectiva:         ov.salida_efectiva         || null,
+                horas_extra_manual:      ov.horas_extra_manual      ?? null,
+                horas_nocturnas_manual:  ov.horas_nocturnas_manual  ?? null,
+                recargo_nocturno_manual: ov.recargo_nocturno_manual ?? null,
               }),
             })
           }}
