@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
   // Overrides del admin (correcciones manuales y jornadas adicionales)
   const { data: overrides } = await supabase
     .from('horas_extra_overrides')
-    .select('fecha, hora_ingreso, salida_efectiva, horas_extra_manual')
+    .select('fecha, hora_ingreso, salida_efectiva, horas_extra_manual, horas_nocturnas_manual, recargo_nocturno_manual')
     .eq('cedula', empleado.cedula)
     .gte('fecha', fechaInicio)
     .lte('fecha', fechaFin)
@@ -72,12 +72,14 @@ export async function GET(request: NextRequest) {
   }
 
   // Mapa de overrides por fecha
-  const ovMap: Record<string, { hora_ingreso: string | null; salida_efectiva: string | null; horas_extra_manual: number | null }> = {}
+  const ovMap: Record<string, { hora_ingreso: string | null; salida_efectiva: string | null; horas_extra_manual: number | null; horas_nocturnas_manual: number | null; recargo_nocturno_manual: number | null }> = {}
   for (const ov of overrides ?? []) {
     ovMap[ov.fecha] = {
-      hora_ingreso:       ov.hora_ingreso ?? null,
-      salida_efectiva:    ov.salida_efectiva ?? null,
-      horas_extra_manual: typeof ov.horas_extra_manual === 'number' ? ov.horas_extra_manual : null,
+      hora_ingreso:            ov.hora_ingreso            ?? null,
+      salida_efectiva:         ov.salida_efectiva         ?? null,
+      horas_extra_manual:      typeof ov.horas_extra_manual      === 'number' ? ov.horas_extra_manual      : null,
+      horas_nocturnas_manual:  typeof ov.horas_nocturnas_manual  === 'number' ? ov.horas_nocturnas_manual  : null,
+      recargo_nocturno_manual: typeof ov.recargo_nocturno_manual === 'number' ? ov.recargo_nocturno_manual : null,
     }
   }
 
@@ -94,18 +96,20 @@ export async function GET(request: NextRequest) {
       const esAprobado  = !!apro && !apro.rechazado
       const esRechazado = !!apro && apro.rechazado
 
-      // Override: jornada adicional (horas extra ingresadas manualmente)
-      if (ov?.horas_extra_manual && ov.horas_extra_manual > 0) {
+      // Override: jornada adicional (horas ingresadas manualmente — diurnas y/o nocturnas)
+      const tieneManual = (ov?.horas_extra_manual ?? 0) > 0 || (ov?.horas_nocturnas_manual ?? 0) > 0
+      if (tieneManual) {
         return {
           fecha:                a.fecha,
           turno:                null as 'T1' | 'T2' | null,
-          hora_ingreso:         ov.hora_ingreso ?? a.hora_ingreso,
+          hora_ingreso:         ov!.hora_ingreso ?? a.hora_ingreso,
           hora_salida:          a.hora_salida,
           salida_norm:          null as string | null,
           salida_efectiva:      null as string | null,
-          minutos_extra:        Math.round(ov.horas_extra_manual * 60),
-          horas_extra:          ov.horas_extra_manual,
-          horas_recargo:        0,
+          minutos_extra:        Math.round((ov!.horas_extra_manual ?? 0) * 60),
+          horas_extra:          ov!.horas_extra_manual ?? 0,
+          horas_nocturnas:      ov!.horas_nocturnas_manual ?? 0,
+          horas_recargo:        ov!.recargo_nocturno_manual ?? 0,
           aprobado:             esAprobado,
           rechazado:            esRechazado,
           aprobado_por_nombre:  esAprobado ? (apro?.aprobado_por_nombre ?? null) : null,
@@ -153,6 +157,7 @@ export async function GET(request: NextRequest) {
         salida_efectiva:      salidaEfectiva,
         minutos_extra:        minutosExtra,
         horas_extra:          horasExtra,
+        horas_nocturnas:      0,
         horas_recargo:        horasRecargo,
         aprobado:             esAprobado,
         rechazado:            esRechazado,
@@ -160,7 +165,7 @@ export async function GET(request: NextRequest) {
         es_jornada_adicional: false,
       }
     })
-    .filter(r => r.minutos_extra > 0 || r.horas_recargo > 0 || r.aprobado || r.rechazado)
+    .filter(r => r.minutos_extra > 0 || r.horas_recargo > 0 || r.horas_nocturnas > 0 || r.aprobado || r.rechazado)
 
   // Registros aprobados sin asistencia (override o registro manual)
   const registrosSinAsistencia = fechasAprobadas.map(fecha => {
@@ -175,12 +180,13 @@ export async function GET(request: NextRequest) {
       salida_norm:          null as string | null,
       salida_efectiva:      null as string | null,
       minutos_extra:        minExtra,
-      horas_extra:          ov?.horas_extra_manual ?? 0,
-      horas_recargo:        0,
+      horas_extra:          ov?.horas_extra_manual      ?? 0,
+      horas_nocturnas:      ov?.horas_nocturnas_manual  ?? 0,
+      horas_recargo:        ov?.recargo_nocturno_manual ?? 0,
       aprobado:             !apro.rechazado,
       rechazado:            apro.rechazado,
       aprobado_por_nombre:  !apro.rechazado ? (apro.aprobado_por_nombre ?? null) : null,
-      es_jornada_adicional: minExtra > 0,
+      es_jornada_adicional: minExtra > 0 || (ov?.horas_nocturnas_manual ?? 0) > 0,
     }
   })
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, Users, UserCheck, TrendingUp, Calendar, BarChart3 } from 'lucide-react'
+import { RefreshCw, Users, UserCheck, TrendingUp, Calendar, BarChart3, PlusCircle, X, Search, CheckCircle2, Loader2 } from 'lucide-react'
 
 type RegistroBase = { cedula: string; nombre: string; rol: string; hora_ingreso: string; hora_salida: string | null; fecha?: string }
 
@@ -60,6 +60,51 @@ export default function AsistenciaAdminPage() {
   const [resumen,   setResumen]  = useState<ResumenEmpleado[]>([])
   const [stats,     setStats]    = useState<{ total_operarios_sistema?: number } & Partial<EstadisticasRango>>({})
   const [loading,   setLoading]  = useState(true)
+
+  // ── Modal agregar asistencia manual ─────────────────────────────────────
+  type PersonalItem = { cedula: string; nombre: string; rol: string }
+  const [modalAgregar,    setModalAgregar]    = useState(false)
+  const [personal,        setPersonal]        = useState<PersonalItem[]>([])
+  const [busqPersona,     setBusqPersona]     = useState('')
+  const [personaSel,      setPersonaSel]      = useState<PersonalItem | null>(null)
+  const [manFecha,        setManFecha]        = useState(hoy)
+  const [manIngreso,      setManIngreso]      = useState('')
+  const [manSalida,       setManSalida]       = useState('')
+  const [guardandoMan,    setGuardandoMan]    = useState(false)
+  const [errorMan,        setErrorMan]        = useState('')
+  const [okMan,           setOkMan]           = useState(false)
+
+  async function abrirModalAgregar() {
+    setModalAgregar(true)
+    setBusqPersona(''); setPersonaSel(null)
+    setManFecha(fecha); setManIngreso(''); setManSalida('')
+    setErrorMan(''); setOkMan(false)
+    if (personal.length === 0) {
+      const res = await fetch('/api/personal')
+      if (res.ok) setPersonal(await res.json())
+    }
+  }
+
+  async function guardarAsistenciaManual(e: React.FormEvent) {
+    e.preventDefault()
+    if (!personaSel) { setErrorMan('Selecciona una persona'); return }
+    setGuardandoMan(true); setErrorMan('')
+    const res = await fetch('/api/asistencia/manual', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ cedula: personaSel.cedula, fecha: manFecha, hora_ingreso: manIngreso, hora_salida: manSalida || null }),
+    })
+    const data = await res.json()
+    setGuardandoMan(false)
+    if (!res.ok) { setErrorMan(data.error || 'Error al guardar'); return }
+    setOkMan(true)
+    setTimeout(() => { setModalAgregar(false); cargar() }, 1200)
+  }
+
+  const personalFiltrado = personal.filter(p =>
+    p.nombre.toLowerCase().includes(busqPersona.toLowerCase()) ||
+    p.cedula.includes(busqPersona)
+  ).slice(0, 8)
 
   const cargar = useCallback(async () => {
     setLoading(true)
@@ -128,6 +173,12 @@ export default function AsistenciaAdminPage() {
 
         <button onClick={cargar} className="text-gray-400 hover:text-white px-3 py-2 bg-gray-800 rounded-lg hover:bg-gray-700 transition-all">
           <RefreshCw size={14} />
+        </button>
+
+        <button onClick={abrirModalAgregar}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110 ml-auto"
+          style={{ background: 'linear-gradient(135deg,#1d4ed8,#2563eb)', border: '1px solid #3b82f6' }}>
+          <PlusCircle size={14} /> Agregar asistencia
         </button>
       </div>
 
@@ -451,6 +502,116 @@ export default function AsistenciaAdminPage() {
       )}
 
       {loading && <p className="text-center text-gray-500 py-12 text-sm">Cargando...</p>}
+
+      {/* ── Modal agregar asistencia manual ── */}
+      {modalAgregar && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}>
+          <div className="w-full max-w-md rounded-2xl p-6 shadow-2xl"
+            style={{ background: '#111827', border: '1px solid #374151' }}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-white font-bold text-base flex items-center gap-2">
+                <PlusCircle size={16} className="text-blue-400" /> Agregar asistencia manual
+              </h3>
+              <button onClick={() => setModalAgregar(false)} className="text-gray-500 hover:text-white"><X size={16} /></button>
+            </div>
+
+            <form onSubmit={guardarAsistenciaManual} className="flex flex-col gap-4">
+
+              {/* Búsqueda de persona */}
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Persona</label>
+                {personaSel ? (
+                  <div className="flex items-center justify-between p-3 rounded-lg"
+                    style={{ background: '#1f2937', border: '1px solid #3b82f6' }}>
+                    <div>
+                      <p className="text-white font-semibold text-sm">{personaSel.nombre}</p>
+                      <p className="text-gray-500 text-xs font-mono">{personaSel.cedula} · {personaSel.rol}</p>
+                    </div>
+                    <button type="button" onClick={() => { setPersonaSel(null); setBusqPersona('') }}
+                      className="text-gray-500 hover:text-white"><X size={14} /></button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <div className="flex items-center gap-2 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2">
+                      <Search size={13} className="text-gray-500" />
+                      <input
+                        autoFocus
+                        type="text" placeholder="Buscar por nombre o cédula..."
+                        value={busqPersona} onChange={e => setBusqPersona(e.target.value)}
+                        className="flex-1 bg-transparent text-white text-sm focus:outline-none"
+                      />
+                    </div>
+                    {busqPersona.length > 0 && personalFiltrado.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 mt-1 rounded-lg shadow-xl z-10 overflow-hidden"
+                        style={{ background: '#1f2937', border: '1px solid #374151' }}>
+                        {personalFiltrado.map(p => (
+                          <button key={p.cedula} type="button"
+                            onClick={() => { setPersonaSel(p); setBusqPersona('') }}
+                            className="w-full text-left px-3 py-2.5 hover:bg-gray-700 transition-colors">
+                            <p className="text-white text-sm font-medium">{p.nombre}</p>
+                            <p className="text-gray-500 text-xs font-mono">{p.cedula} · {p.rol}</p>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {busqPersona.length > 1 && personalFiltrado.length === 0 && (
+                      <p className="text-gray-600 text-xs mt-1 pl-1">Sin resultados</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Fecha */}
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Fecha</label>
+                <input type="date" required value={manFecha} onChange={e => setManFecha(e.target.value)}
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-blue-500" />
+              </div>
+
+              {/* Horario */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">Hora ingreso <span className="text-emerald-400">*</span></label>
+                  <input type="time" required value={manIngreso} onChange={e => setManIngreso(e.target.value)}
+                    className="w-full bg-gray-800 border border-emerald-800 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-emerald-400" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">Hora salida <span className="text-gray-600">(opcional)</span></label>
+                  <input type="time" value={manSalida} onChange={e => setManSalida(e.target.value)}
+                    className="w-full bg-gray-800 border border-orange-900 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:border-orange-500" />
+                </div>
+              </div>
+
+              {errorMan && (
+                <p className="text-red-400 text-xs flex items-center gap-1">
+                  <X size={12} /> {errorMan}
+                </p>
+              )}
+
+              {okMan && (
+                <p className="text-emerald-400 text-xs flex items-center gap-1">
+                  <CheckCircle2 size={12} /> Asistencia registrada correctamente
+                </p>
+              )}
+
+              <div className="flex gap-2 mt-1">
+                <button type="button" onClick={() => setModalAgregar(false)}
+                  className="flex-1 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-colors"
+                  style={{ background: '#1f2937', border: '1px solid #374151' }}>
+                  Cancelar
+                </button>
+                <button type="submit" disabled={guardandoMan || !personaSel}
+                  className="flex-1 py-2 rounded-lg text-sm font-semibold text-white flex items-center justify-center gap-1.5 disabled:opacity-50 transition-all hover:brightness-110"
+                  style={{ background: 'linear-gradient(135deg,#1d4ed8,#2563eb)', border: '1px solid #3b82f6' }}>
+                  {guardandoMan ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle2 size={14} />}
+                  {guardandoMan ? 'Guardando...' : 'Registrar asistencia'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

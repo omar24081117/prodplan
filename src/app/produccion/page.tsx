@@ -34,7 +34,9 @@ export default function ProduccionPage() {
       if (!res.ok) {
         setErrorPlan('Clave incorrecta')
       } else {
+        const data = await res.json()
         sessionStorage.setItem('planeacion_auth', '1')
+        sessionStorage.setItem('planeacion_perfil', data.perfil ?? 'produccion')
         router.push('/produccion/planeacion')
       }
     } catch {

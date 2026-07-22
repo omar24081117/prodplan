@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Truck, ArrowLeft, Upload, Plus, X, Trash2, Search,
@@ -200,6 +200,150 @@ function EditCell({
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
+   Chart: Despachados por día
+───────────────────────────────────────────────────────────────────────── */
+function BarChartDia({ days, byDay }: { days: string[]; byDay: Record<string, number> }) {
+  const [hov, setHov] = useState<{ idx: number; cx: number; cy: number } | null>(null)
+  const CW = 700, CH = 200, ML = 40, MR = 12, MT = 24, MB = 36
+  const PW = CW - ML - MR, PH = CH - MT - MB
+  const maxVal   = Math.max(...days.map(d => byDay[d] ?? 0), 1)
+  // Cap bar width so a single bar never fills the whole chart
+  const rawGap   = PW / Math.max(days.length, 1)
+  const barW     = Math.min(36, Math.max(3, rawGap - 3))
+  const gap      = days.length === 1 ? PW : rawGap   // center single bar
+  const every    = days.length <= 14 ? 1 : days.length <= 31 ? 3 : days.length <= 62 ? 7 : 14
+  const gridVs   = [0.25, 0.5, 0.75, 1].map(f => Math.ceil(f * maxVal))
+  return (
+    <div className="relative select-none">
+      <svg width="100%" viewBox={`0 0 ${CW} ${CH}`} style={{ overflow: 'visible' }}>
+        {/* Grid */}
+        {gridVs.map(v => { const y = MT + PH - (v / maxVal) * PH; return (
+          <g key={v}>
+            <line x1={ML} y1={y} x2={CW - MR} y2={y} stroke="#e2e8f0" strokeWidth="1" />
+            <text x={ML - 5} y={y + 4} textAnchor="end" fill="#94a3b8" fontSize="10">{v}</text>
+          </g>
+        )})}
+        {/* Bars */}
+        {days.map((day, i) => {
+          const val = byDay[day] ?? 0
+          const x   = days.length === 1
+            ? ML + (PW - barW) / 2
+            : ML + i * gap + (gap - barW) / 2
+          const bh  = val === 0 ? 2 : Math.max(4, (val / maxVal) * PH)
+          const y   = MT + PH - bh
+          const isH = hov?.idx === i
+          return (
+            <g key={day}
+              onMouseEnter={e => setHov({ idx: i, cx: e.clientX, cy: e.clientY })}
+              onMouseLeave={() => setHov(null)}>
+              <rect x={x} y={y} width={barW} height={bh} rx={Math.min(4, barW / 2)}
+                fill={isH ? '#16a34a' : '#22c55e'} opacity={val === 0 ? 0.15 : 1}
+                style={{ cursor: val > 0 ? 'pointer' : 'default', transition: 'fill 0.1s' }} />
+              {/* Value above bar */}
+              {val > 0 && (
+                <text x={x + barW / 2} y={y - 4} textAnchor="middle" fill="#15803d" fontSize="11" fontWeight="700">{val}</text>
+              )}
+            </g>
+          )
+        })}
+        {/* X-axis labels */}
+        {days.map((day, i) => {
+          if (i % every !== 0 && days.length !== 1) return null
+          const x = days.length === 1
+            ? ML + PW / 2
+            : ML + i * gap + gap / 2
+          const [, m, d] = day.split('-')
+          return <text key={day} x={x} y={CH - 4} textAnchor="middle" fill="#64748b" fontSize="10">{`${d}/${m}`}</text>
+        })}
+        {/* Axes */}
+        <line x1={ML} y1={MT} x2={ML} y2={MT + PH} stroke="#e2e8f0" strokeWidth="1" />
+        <line x1={ML} y1={MT + PH} x2={CW - MR} y2={MT + PH} stroke="#e2e8f0" strokeWidth="1" />
+      </svg>
+      {hov !== null && (() => {
+        const day = days[hov.idx]; const val = byDay[day] ?? 0
+        const [yr, m, d] = day.split('-')
+        return (
+          <div className="fixed z-50 pointer-events-none rounded-lg px-3 py-2 text-xs shadow-lg"
+            style={{ left: hov.cx + 14, top: hov.cy - 8, transform: 'translateY(-100%)',
+              background: '#1e293b', border: '1px solid #334155', color: '#f1f5f9', minWidth: 130 }}>
+            <p className="font-bold text-green-400 mb-0.5">{val} despacho{val !== 1 ? 's' : ''}</p>
+            <p className="text-slate-400">{d}/{m}/{yr}</p>
+          </div>
+        )
+      })()}
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Chart: Pedidos por cliente (horizontal stacked bars)
+───────────────────────────────────────────────────────────────────────── */
+type ClientRow = { cliente: string; total: number; despachado: number; pendiente: number; vencido: number }
+function ClienteBarChart({ data }: { data: ClientRow[] }) {
+  const [hov, setHov] = useState<{ i: number; cx: number; cy: number } | null>(null)
+  const CW = 700, PL = 155, PR = 36, PT = 6, rowH = 22
+  const CH = PT + data.length * rowH + 8
+  const barAreaW = CW - PL - PR
+  const maxTotal = Math.max(...data.map(r => r.total), 1)
+  return (
+    <div className="relative select-none">
+      <div className="flex gap-4 mb-2 text-xs">
+        {([['#16a34a','Despachado'],['#dc2626','Vencido'],['#ca8a04','Pendiente']] as [string,string][]).map(([c,l]) => (
+          <div key={l} className="flex items-center gap-1.5">
+            <div className="w-3 h-2 rounded-sm" style={{ background: c }} />
+            <span className="text-slate-500">{l}</span>
+          </div>
+        ))}
+      </div>
+      <svg width="100%" viewBox={`0 0 ${CW} ${CH}`} style={{ overflow: 'visible' }}>
+        {data.map((row, i) => {
+          const y   = PT + i * rowH
+          const tot = (row.total / maxTotal) * barAreaW
+          const dW  = row.total > 0 ? (row.despachado / row.total) * tot : 0
+          const vW  = row.total > 0 ? (row.vencido / row.total) * tot : 0
+          const pW  = row.total > 0 ? (row.pendiente / row.total) * tot : 0
+          const isH = hov?.i === i
+          const lbl = row.cliente.length > 22 ? row.cliente.slice(0, 22) + '…' : row.cliente
+          return (
+            <g key={row.cliente}
+              onMouseEnter={e => setHov({ i, cx: e.clientX, cy: e.clientY })}
+              onMouseLeave={() => setHov(null)} style={{ cursor: 'pointer' }}>
+              <rect x={0} y={y} width={CW} height={rowH - 2} fill={isH ? '#f1f5f9' : 'transparent'} rx={3} />
+              <text x={PL - 6} y={y + rowH / 2 + 3.5} textAnchor="end" fontSize="10"
+                fill={isH ? '#1e293b' : '#64748b'}>{lbl}</text>
+              {dW > 0 && <rect x={PL} y={y + 4} width={dW} height={rowH - 10} rx={3} fill="#16a34a" />}
+              {vW > 0 && <rect x={PL + dW} y={y + 4} width={vW} height={rowH - 10}
+                rx={dW === 0 ? 3 : 0} fill="#dc2626" />}
+              {pW > 0 && <rect x={PL + dW + vW} y={y + 4} width={pW} height={rowH - 10}
+                rx={dW === 0 && vW === 0 ? 3 : 0} fill="#ca8a04" />}
+              <text x={PL + tot + 5} y={y + rowH / 2 + 3.5} fontSize="10" fill="#94a3b8">{row.total}</text>
+            </g>
+          )
+        })}
+      </svg>
+      {hov !== null && (() => {
+        const r = data[hov.i]
+        return (
+          <div className="fixed z-50 pointer-events-none rounded-lg px-3 py-2 text-xs shadow-lg"
+            style={{ left: hov.cx + 14, top: hov.cy - 8, transform: 'translateY(-100%)',
+              background: '#1e293b', border: '1px solid #334155', color: '#f1f5f9', minWidth: 165 }}>
+            <p className="font-bold text-white mb-1.5 leading-tight">{r.cliente}</p>
+            <div className="flex flex-col gap-0.5">
+              <div className="flex justify-between gap-4"><span className="text-green-400">Despachado</span><span className="font-semibold">{r.despachado}</span></div>
+              <div className="flex justify-between gap-4"><span className="text-red-400">Vencido</span><span className="font-semibold">{r.vencido}</span></div>
+              <div className="flex justify-between gap-4"><span className="text-yellow-300">Pendiente</span><span className="font-semibold">{r.pendiente}</span></div>
+              <div className="flex justify-between gap-4 border-t mt-1 pt-1" style={{ borderColor: '#334155' }}>
+                <span className="text-slate-400">Total</span><span className="font-bold">{r.total}</span>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
    Page
 ───────────────────────────────────────────────────────────────────────── */
 type Sesion = { cedula: string; nombre: string; rol: string }
@@ -278,6 +422,17 @@ export default function DespachosPage() {
   const [filtroAlistado, setFiltroAlistado]       = useState('')
   const [filtroGuia, setFiltroGuia]               = useState('')
   const [filtroProveedor, setFiltroProveedor]     = useState('')
+
+  // ── Indicadores ────────────────────────────────────────────────────────────
+  const [vistaTab, setVistaTab]   = useState<'lista' | 'indicadores'>('lista')
+  const [indDesde, setIndDesde]   = useState(() => {
+    const t = hoyBogota()
+    const d = new Date(t + 'T00:00:00'); d.setDate(d.getDate() - 29)
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+  })
+  const [indHasta, setIndHasta]   = useState(hoyBogota)
+  const [indCliente, setIndCliente] = useState('')
+  const [indLinea, setIndLinea]   = useState('')
 
   // Modal picking
   const [modalPicking, setModalPicking]   = useState<Despacho | null>(null)
@@ -574,6 +729,59 @@ export default function DespachosPage() {
       return (a.fecha_max_entrega ?? '').localeCompare(b.fecha_max_entrega ?? '')
     })
 
+  /* ── Indicadores computations ──────────────────────────────────────────── */
+  const despachEnRango = useMemo(() =>
+    pedidos.filter(p =>
+      p.fecha_despacho && p.fecha_despacho >= indDesde && p.fecha_despacho <= indHasta &&
+      (!indCliente || p.cliente.toLowerCase().includes(indCliente.toLowerCase())) &&
+      (!indLinea || p.linea === indLinea)
+    ), [pedidos, indDesde, indHasta, indCliente, indLinea])
+
+  const pedidosEnRango = useMemo(() =>
+    pedidos.filter(p => {
+      const ref = p.fecha_subida || p.fecha_max_entrega
+      if (!ref || ref < indDesde || ref > indHasta) return false
+      if (indCliente && !p.cliente.toLowerCase().includes(indCliente.toLowerCase())) return false
+      if (indLinea && p.linea !== indLinea) return false
+      return true
+    }), [pedidos, indDesde, indHasta, indCliente, indLinea])
+
+  const despachByDay = useMemo(() => {
+    const map: Record<string, number> = {}
+    despachEnRango.forEach(p => { if (p.fecha_despacho) map[p.fecha_despacho] = (map[p.fecha_despacho] ?? 0) + 1 })
+    return map
+  }, [despachEnRango])
+
+  const daysInRange = useMemo(() => {
+    const days: string[] = []
+    if (!indDesde || !indHasta || indDesde > indHasta) return days
+    const cur = new Date(indDesde + 'T00:00:00'), end = new Date(indHasta + 'T00:00:00')
+    while (cur <= end) {
+      days.push(`${cur.getFullYear()}-${String(cur.getMonth()+1).padStart(2,'0')}-${String(cur.getDate()).padStart(2,'0')}`)
+      cur.setDate(cur.getDate() + 1)
+    }
+    return days
+  }, [indDesde, indHasta])
+
+  const porCliente: ClientRow[] = useMemo(() => {
+    const map: Record<string, ClientRow> = {}
+    pedidosEnRango.forEach(p => {
+      const est = getEstado(p)
+      if (!map[p.cliente]) map[p.cliente] = { cliente: p.cliente, total: 0, despachado: 0, pendiente: 0, vencido: 0 }
+      map[p.cliente].total++
+      if (est === 'DESPACHADO') map[p.cliente].despachado++
+      else if (est === 'VENCIDO') map[p.cliente].vencido++
+      else map[p.cliente].pendiente++
+    })
+    return Object.values(map).sort((a, b) => b.total - a.total).slice(0, 15)
+  }, [pedidosEnRango])
+
+  const indTotal       = pedidosEnRango.length
+  const indDespachados = pedidosEnRango.filter(p => p.fecha_despacho).length
+  const indVencidos    = pedidosEnRango.filter(p => !p.fecha_despacho && p.fecha_max_entrega && p.fecha_max_entrega < today).length
+  const indPendientes  = indTotal - indDespachados - indVencidos
+  const indPct         = indTotal > 0 ? Math.round((indDespachados / indTotal) * 100) : 0
+
   /* ── Render ───────────────────────────────────────────────────────────── */
 
   // Verificando sesión
@@ -819,6 +1027,23 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
           </div>
         )}
 
+        {/* ── Tabs ── */}
+        <div className="flex" style={{ borderBottom: '1px solid #1a4060' }}>
+          {(['lista', 'indicadores'] as const).map(t => (
+            <button key={t} onClick={() => setVistaTab(t)}
+              className="px-5 py-2.5 text-sm font-medium transition-all"
+              style={{
+                color: vistaTab === t ? '#60a0df' : '#4a6a8a',
+                borderBottom: vistaTab === t ? '2px solid #60a0df' : '2px solid transparent',
+                marginBottom: '-1px',
+                background: 'transparent',
+              }}>
+              {t === 'lista' ? '📋 Lista de Pedidos' : '📊 Indicadores'}
+            </button>
+          ))}
+        </div>
+
+        {vistaTab === 'lista' && <>
         {/* ── Filters ── */}
         <div className="flex flex-wrap items-center gap-2">
           {/* Estado chips */}
@@ -1315,6 +1540,117 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
           <p className="text-xs text-gray-600 text-right">
             {filtrados.length} de {total} pedidos
           </p>
+        )}
+        </>}
+
+        {/* ── Indicadores ── */}
+        {vistaTab === 'indicadores' && (
+          <div className="flex flex-col gap-4 rounded-xl p-4" style={{ background: '#ffffff', border: '1px solid #e2e8f0' }}>
+            {/* Filtros período */}
+            <div className="flex flex-wrap items-center gap-2 p-3 rounded-lg"
+              style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+              <span className="text-xs text-slate-500 font-medium">Período:</span>
+              <div className="flex items-center gap-1.5">
+                <input type="date" value={indDesde} onChange={e => setIndDesde(e.target.value)}
+                  className="text-xs rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  style={{ background: '#fff', border: '1px solid #cbd5e1', color: '#334155' }} />
+                <span className="text-slate-400 text-xs">—</span>
+                <input type="date" value={indHasta} onChange={e => setIndHasta(e.target.value)}
+                  className="text-xs rounded-md px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                  style={{ background: '#fff', border: '1px solid #cbd5e1', color: '#334155' }} />
+              </div>
+              {([['7d','7d'],['30d','30d'],['90d','3m'],['ytd','Este año']] as [string,string][]).map(([k,l]) => (
+                <button key={k} onClick={() => {
+                  const t = hoyBogota()
+                  const d = new Date(t + 'T00:00:00')
+                  if (k === '7d') d.setDate(d.getDate() - 6)
+                  else if (k === '30d') d.setDate(d.getDate() - 29)
+                  else if (k === '90d') d.setDate(d.getDate() - 89)
+                  else d.setMonth(0, 1)
+                  const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+                  setIndDesde(ds); setIndHasta(t)
+                }}
+                  className="text-xs px-2.5 py-1 rounded-md font-medium transition-colors hover:bg-blue-50 hover:text-blue-600"
+                  style={{ background: '#fff', border: '1px solid #cbd5e1', color: '#64748b' }}>
+                  {l}
+                </button>
+              ))}
+              <div className="flex items-center gap-1.5 rounded-md px-2 py-1"
+                style={{ background: '#fff', border: '1px solid #cbd5e1' }}>
+                <Search size={11} className="text-slate-400" />
+                <input type="text" placeholder="Cliente…" value={indCliente}
+                  onChange={e => setIndCliente(e.target.value)}
+                  className="bg-transparent text-xs text-slate-700 placeholder-slate-400 focus:outline-none w-24" />
+                {indCliente && <button onClick={() => setIndCliente('')} className="text-slate-400 hover:text-slate-600"><X size={11} /></button>}
+              </div>
+              <select value={indLinea} onChange={e => setIndLinea(e.target.value)}
+                className="text-xs rounded-md px-2 py-1 focus:outline-none cursor-pointer"
+                style={{ background: '#fff', border: '1px solid #cbd5e1', color: '#64748b' }}>
+                <option value="">Todas las líneas</option>
+                {LINEAS.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </div>
+
+            {/* KPIs del período */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              {([
+                { label: 'Pedidos', value: indTotal,       color: '#3b82f6', bg: '#eff6ff', border: '#bfdbfe' },
+                { label: 'Despachados', value: indDespachados, color: '#16a34a', bg: '#f0fdf4', border: '#bbf7d0' },
+                { label: 'Pendientes', value: indPendientes,  color: '#ca8a04', bg: '#fffbeb', border: '#fde68a' },
+                { label: 'Vencidos',   value: indVencidos,    color: '#dc2626', bg: '#fef2f2', border: '#fecaca' },
+                { label: 'Cumplimiento', value: `${indPct}%`,
+                  color: indPct >= 80 ? '#16a34a' : indPct >= 50 ? '#ca8a04' : '#dc2626',
+                  bg: indPct >= 80 ? '#f0fdf4' : indPct >= 50 ? '#fffbeb' : '#fef2f2',
+                  border: indPct >= 80 ? '#bbf7d0' : indPct >= 50 ? '#fde68a' : '#fecaca' },
+              ] as {label:string;value:number|string;color:string;bg:string;border:string}[]).map(k => (
+                <div key={k.label} className="rounded-lg p-3 flex flex-col"
+                  style={{ background: k.bg, border: `1px solid ${k.border}` }}>
+                  <span className="text-2xl font-bold" style={{ color: k.color }}>{k.value}</span>
+                  <span className="text-xs text-slate-500 mt-0.5">{k.label}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Barra cumplimiento */}
+            {indTotal > 0 && (
+              <div className="rounded-lg px-4 py-2.5 flex items-center gap-3"
+                style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                <span className="text-xs text-slate-500 whitespace-nowrap font-medium">% Cumplimiento</span>
+                <div className="flex-1 h-1.5 rounded-full" style={{ background: '#e2e8f0' }}>
+                  <div className="h-1.5 rounded-full transition-all" style={{
+                    width: `${indPct}%`,
+                    background: indPct >= 80 ? '#16a34a' : indPct >= 50 ? '#ca8a04' : '#dc2626'
+                  }} />
+                </div>
+                <span className="text-sm font-bold"
+                  style={{ color: indPct >= 80 ? '#16a34a' : indPct >= 50 ? '#ca8a04' : '#dc2626' }}>{indPct}%</span>
+              </div>
+            )}
+
+            {/* Gráfica: Despachados por día */}
+            <div className="rounded-lg p-4" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+              <h3 className="text-sm font-semibold text-slate-700 mb-0.5">Despachados por día</h3>
+              <p className="text-xs text-slate-400 mb-3">
+                {despachEnRango.length} despacho{despachEnRango.length !== 1 ? 's' : ''} · {daysInRange.length} día{daysInRange.length !== 1 ? 's' : ''}
+              </p>
+              {daysInRange.length === 0
+                ? <p className="text-slate-400 text-sm text-center py-8">Selecciona un rango de fechas válido</p>
+                : <BarChartDia days={daysInRange} byDay={despachByDay} />
+              }
+            </div>
+
+            {/* Gráfica: Pedidos por cliente */}
+            <div className="rounded-lg p-4" style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+              <h3 className="text-sm font-semibold text-slate-700 mb-0.5">Pedidos por cliente</h3>
+              <p className="text-xs text-slate-400 mb-3">
+                Top {porCliente.length} clientes · barras apiladas por estado
+              </p>
+              {porCliente.length === 0
+                ? <p className="text-slate-400 text-sm text-center py-8">Sin datos para el período seleccionado</p>
+                : <ClienteBarChart data={porCliente} />
+              }
+            </div>
+          </div>
         )}
       </div>
 

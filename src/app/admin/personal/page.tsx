@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import * as XLSX from 'xlsx'
+import { createClient } from '@/lib/supabase/client'
 
 const ROLES = [
   'Operario',
@@ -46,7 +47,20 @@ export default function PersonalPage() {
   const [editandoRol, setEditandoRol]             = useState<string | null>(null)
   const [editandoContrato, setEditandoContrato]   = useState<string | null>(null)
   const [filtroContrato, setFiltroContrato]       = useState('')
+  const [esDirector, setEsDirector]               = useState(false)
+  const [editandoNombre, setEditandoNombre]       = useState<string | null>(null)
+  const [nombreTemp, setNombreTemp]               = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    createClient().auth.getUser().then(({ data }) => {
+      const u = data.user
+      if (!u) return
+      const esAdmin = u.email === 'admin@prodplan.com'
+      const flag    = u.user_metadata?.es_director === true
+      setEsDirector(esAdmin || flag)
+    })
+  }, [])
 
   const cargar = useCallback(async () => {
     const res  = await fetch('/api/personal')
@@ -114,6 +128,18 @@ export default function PersonalPage() {
       setError(err.error || 'No se pudo guardar. Ejecuta el SQL de migración en Supabase.')
     }
     setEditandoContrato(null)
+  }
+
+  async function cambiarNombre(op: Operario, nuevoNombre: string) {
+    const nombre = nuevoNombre.trim()
+    if (!nombre || nombre === op.nombre) { setEditandoNombre(null); return }
+    await fetch(`/api/personal/${op.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nombre }),
+    })
+    setPersonal(prev => prev.map(p => p.id === op.id ? { ...p, nombre } : p))
+    setEditandoNombre(null)
   }
 
   async function importarExcel(e: React.ChangeEvent<HTMLInputElement>) {
@@ -282,7 +308,34 @@ export default function PersonalPage() {
               {[...activos, ...inactivos].map(p => (
                 <tr key={p.id} className={`border-b border-gray-800/50 ${!p.activo ? 'opacity-50' : 'hover:bg-gray-800/30'}`}>
                   <td className="px-4 py-2.5 text-gray-300 font-mono">{p.cedula}</td>
-                  <td className="px-4 py-2.5 text-white">{p.nombre}</td>
+                  <td className="px-4 py-2.5">
+                    {esDirector && editandoNombre === p.id ? (
+                      <input
+                        autoFocus
+                        type="text"
+                        value={nombreTemp}
+                        onChange={e => setNombreTemp(e.target.value)}
+                        onBlur={() => cambiarNombre(p, nombreTemp)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') cambiarNombre(p, nombreTemp)
+                          if (e.key === 'Escape') setEditandoNombre(null)
+                        }}
+                        className="bg-gray-800 border border-blue-500 text-white rounded px-2 py-0.5 text-sm w-full focus:outline-none"
+                      />
+                    ) : (
+                      <span
+                        className={`text-white${esDirector ? ' cursor-pointer hover:text-blue-300' : ''}`}
+                        title={esDirector ? 'Clic para editar nombre' : undefined}
+                        onClick={() => {
+                          if (!esDirector) return
+                          setNombreTemp(p.nombre)
+                          setEditandoNombre(p.id)
+                        }}
+                      >
+                        {p.nombre}
+                      </span>
+                    )}
+                  </td>
 
                   {/* Rol editable inline */}
                   <td className="px-4 py-2.5">

@@ -96,6 +96,16 @@ function generateSemanas(): string[] {
   return semanas
 }
 
+const FC_WINDOW = 10
+const DM_WINDOW = 10
+// Computed once at module load — deterministic (same year, same result)
+const _ALL_SEMANAS = generateSemanas()
+const _HOY_LUNES   = toISO(getMonday(new Date()))
+const _DEFAULT_FC_OFFSET = Math.max(0, Math.min(
+  _ALL_SEMANAS.indexOf(_HOY_LUNES) > 0 ? _ALL_SEMANAS.indexOf(_HOY_LUNES) - 1 : 0,
+  _ALL_SEMANAS.length - FC_WINDOW
+))
+
 /* ──────────────────────────────────────────────────────────────────────────
    SQL Banner
 ────────────────────────────────────────────────────────────────────────── */
@@ -332,12 +342,18 @@ export default function PlaneacionPage() {
   const [tab, setTab] = useState(0)
   const [showSql, setShowSql] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
-  const [authOk, setAuthOk] = useState(false)
+  const [authOk, setAuthOk]   = useState(false)
+  const [perfil, setPerfil]   = useState<'comercial' | 'produccion'>('produccion')
 
   // Auth guard — verificar clave de Planeación
   useEffect(() => {
     if (typeof window !== 'undefined') {
       if (sessionStorage.getItem('planeacion_auth') === '1') {
+        const p = sessionStorage.getItem('planeacion_perfil')
+        const esComercial = p === 'comercial'
+        setPerfil(esComercial ? 'comercial' : 'produccion')
+        if (esComercial) setTab(0)  // comercial → FORECAST
+        else             setTab(1)  // produccion → Demanda
         setAuthOk(true)
       } else {
         router.replace('/produccion')
@@ -359,7 +375,11 @@ export default function PlaneacionPage() {
   const [uploadingFc, setUploadingFc]   = useState(false)
   const [fcImportMsg, setFcImportMsg]   = useState('')
   const [filtroFc, setFiltroFc]         = useState('')
-  const semanas = generateSemanas()
+  const semanas = _ALL_SEMANAS
+  const [fcOffset, setFcOffset] = useState(_DEFAULT_FC_OFFSET)
+  const [dmOffset, setDmOffset] = useState(_DEFAULT_FC_OFFSET)
+  const semanasVis   = useMemo(() => semanas.slice(fcOffset, fcOffset + FC_WINDOW), [fcOffset])
+  const semanasVisDm = useMemo(() => semanas.slice(dmOffset, dmOffset + DM_WINDOW), [dmOffset])
   const saveTimer   = useRef<ReturnType<typeof setTimeout> | null>(null)
   const fileFcRef   = useRef<HTMLInputElement>(null)
 
@@ -389,8 +409,9 @@ export default function PlaneacionPage() {
   // ── Demanda Pedido (tab 5) ──────────────────────────────────────────────
   const [semDemanda, setSemDemanda]       = useState(hoyLunes)
   const [filtroDemanda, setFiltroDemanda] = useState('')
-  const [demandaOverride, setDemandaOverride] = useState<Record<string,number>>({}) // ref|fecha → pedido
-  const [loadingDemanda, setLoadingDemanda]   = useState(false)
+  const [demandaOverride, setDemandaOverride]   = useState<Record<string,number>>({})         // ref|fecha → pedido
+  const [demandaProdOv,   setDemandaProdOv]     = useState<Record<string,number|null>>({})    // ref|fecha → prod override (null=restaurar)
+  const [loadingDemanda, setLoadingDemanda]     = useState(false)
   const saveDemandaTimers                 = useRef<Record<string,ReturnType<typeof setTimeout>>>({})
 
   // ── Comentarios ────────────────────────────────────────────────────────
@@ -548,8 +569,18 @@ export default function PlaneacionPage() {
     if (res.ok) {
       const rows: {referencia:string;fecha:string;pedido:number}[] = await res.json()
       const map: Record<string,number> = {}
-      rows.forEach(r => { map[`${r.referencia}|${r.fecha}`] = r.pedido })
+      const prodOv: Record<string,number|null> = {}
+      rows.forEach(r => {
+        if (r.referencia.startsWith('PROD:')) {
+          // PROD override almacenado con prefijo
+          const ref = r.referencia.slice(5)
+          prodOv[`${ref}|${r.fecha}`] = r.pedido
+        } else {
+          map[`${r.referencia}|${r.fecha}`] = r.pedido
+        }
+      })
       setDemandaOverride(map)
+      setDemandaProdOv(prodOv)
     }
     setLoadingDemanda(false)
   }
@@ -564,6 +595,24 @@ export default function PlaneacionPage() {
         body: JSON.stringify({referencia: ref, fecha, pedido: val}),
       })
     }, 700)
+  }
+
+  function saveProdDemandaOv(ref: string, fecha: string, val: string) {
+    const key = `${ref}|${fecha}`
+    if (val === '') {
+      setDemandaProdOv(prev => { const n = {...prev}; delete n[key]; return n })
+      fetch('/api/planeacion/demanda-diaria', {
+        method: 'DELETE', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ referencia: `PROD:${ref}`, fecha }),
+      })
+    } else {
+      const num = Number(val) || 0
+      setDemandaProdOv(prev => ({ ...prev, [key]: num }))
+      fetch('/api/planeacion/demanda-diaria', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ referencia: `PROD:${ref}`, fecha, pedido: num }),
+      })
+    }
   }
 
   useEffect(() => { if (tab === 2) cargarPlanDiario(semDiario) }, [tab, semDiario])
@@ -1124,11 +1173,12 @@ export default function PlaneacionPage() {
   /* ─────────────────────────────────────────────────────────────────────────
      RENDER
   ───────────────────────────────────────────────────────────────────────── */
+  // comercial → solo FORECAST  |  produccion → todo
   const TABS = [
-    { label: 'FORECAST',    icon: <BarChart2 size={14} /> },
-    { label: 'Demanda',     icon: <Calendar size={14} /> },
-    { label: 'Plan Diario', icon: <BarChart2 size={14} /> },
-    { label: 'Plan Mensual',icon: <Calendar size={14} /> },
+    { label: 'FORECAST',    icon: <BarChart2 size={14} />, ocultarComercial: false },
+    { label: 'Demanda',     icon: <Calendar size={14} />,  ocultarComercial: true  },
+    { label: 'Plan Diario', icon: <BarChart2 size={14} />, ocultarComercial: true  },
+    { label: 'Plan Mensual',icon: <Calendar size={14} />,  ocultarComercial: true  },
   ]
 
   // FORECAST scroll — drag-to-scroll
@@ -1148,13 +1198,12 @@ export default function PlaneacionPage() {
   function fcMouseUp()    { fcDragging.current = false }
   function fcMouseLeave() { fcDragging.current = false }
   function fcScroll(dir: number) {
-    fcScrollRef.current?.scrollBy({ left: dir * 504, behavior: 'smooth' })
+    setFcOffset(prev => Math.max(0, Math.min(prev + dir * 2, semanas.length - FC_WINDOW)))
   }
   function fcScrollToToday() {
     const idx = semanas.indexOf(hoyLunes)
-    if (idx < 0 || !fcScrollRef.current) return
-    // 192px product column + 252px per week (PEDIDO+PROD+SALDO = 3×84)
-    fcScrollRef.current.scrollLeft = 192 + Math.max(0, idx - 1) * 252
+    if (idx < 0) return
+    setFcOffset(Math.max(0, Math.min(idx - 1, semanas.length - FC_WINDOW)))
   }
 
   // Plan Mensual scroll — drag-to-scroll
@@ -1184,55 +1233,44 @@ export default function PlaneacionPage() {
   function dmMouseUp()    { dmDragging.current = false }
   function dmMouseLeave() { dmDragging.current = false }
   function dmScroll(dir: number) {
-    dmScrollRef.current?.scrollBy({ left: dir * 504, behavior: 'smooth' })
+    setDmOffset(prev => Math.max(0, Math.min(prev + dir * 2, semanas.length - DM_WINDOW)))
   }
   function dmScrollToToday() {
     const idx = semanas.indexOf(hoyLunes)
-    if (idx < 0 || !dmScrollRef.current) return
-    // 312px fixed area (240 product + 72 inv) + 336px per week
-    dmScrollRef.current.scrollLeft = 312 + Math.max(0, idx - 1) * 336
+    if (idx < 0) return
+    setDmOffset(Math.max(0, Math.min(idx - 1, semanas.length - DM_WINDOW)))
   }
 
-  // Demanda SALDO calculation (respects semana_actualizacion, uses pedido override or proyectado)
+  // Demanda SALDO: existencia (semana cargada) + PROD acumulado - PEDIDO acumulado
   function getSaldosDemanda(ref: string): (number | null)[] {
     const inv = inventario.find(p => p.referencia === ref)
     const semAct = inv?.semana_actualizacion ?? null
 
-    const efectivoDe = (s: string) => {
-      const key = `${ref}_${s}`
+    const pedidoDe = (s: string) => {
       const pedidoManual = demandaOverride[`${ref}|${s}`]
-      const proyectado   = planData[key]?.pedido ?? 0
+      const proyectado   = planData[`${ref}_${s}`]?.pedido ?? 0
       return (pedidoManual !== undefined && pedidoManual > 0) ? pedidoManual : proyectado
+    }
+    const prodDe = (s: string) => {
+      const ovKey = `${ref}|${s}`
+      if (ovKey in demandaProdOv) return demandaProdOv[ovKey] ?? 0
+      return planData[`${ref}_${s}`]?.produccion ?? 0
     }
 
     if (!semAct) {
       let prev = inv?.existencia ?? 0
       return semanas.map(s => {
-        const key = `${ref}_${s}`
-        const { produccion = 0 } = planData[key] ?? {}
-        prev = prev + produccion - efectivoDe(s)
+        prev = prev + prodDe(s) - pedidoDe(s)
         return prev
       })
     }
 
-    // Pre-acumular demanda y producción antes de semana_actualizacion
-    let preDemanda = 0, preProd = 0
-    for (const s of semanas) {
-      if (s >= semAct) break
-      const key = `${ref}_${s}`
-      preDemanda += efectivoDe(s)
-      preProd    += planData[key]?.produccion ?? 0
-    }
-
+    // Desde semana_actualizacion: arranca desde existencia sin ajuste previo
     let prev: number | null = null
     return semanas.map(s => {
       if (s < semAct) return null
-      if (prev === null) {
-        prev = (inv?.existencia ?? 0) + preProd - preDemanda
-      }
-      const key = `${ref}_${s}`
-      const { produccion = 0 } = planData[key] ?? {}
-      prev = prev + produccion - efectivoDe(s)
+      if (prev === null) prev = inv?.existencia ?? 0
+      prev = prev + prodDe(s) - pedidoDe(s)
       return prev
     })
   }
@@ -1299,18 +1337,21 @@ export default function PlaneacionPage() {
 
       {/* Tabs */}
       <div className="px-4 pt-4 flex gap-1 flex-wrap">
-        {TABS.map((t, i) => (
-          <button key={i} onClick={() => setTab(i)}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-t-lg text-sm font-semibold transition-all"
-            style={{
-              background: tab === i ? '#1e3a14' : 'rgba(30,58,20,0.25)',
-              border: `1px solid ${tab === i ? '#3a6228' : '#8ab87a'}`,
-              borderBottom: tab === i ? '1px solid #1e3a14' : '1px solid #8ab87a',
-              color: tab === i ? '#a3d982' : '#3a5a28',
-            }}>
-            {t.icon} {t.label}
-          </button>
-        ))}
+        {TABS.filter(t => perfil === 'comercial' ? !t.ocultarComercial : true).map((t, i) => {
+          const realIdx = TABS.findIndex(x => x.label === t.label)
+          return (
+            <button key={i} onClick={() => setTab(realIdx)}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-t-lg text-sm font-semibold transition-all"
+              style={{
+                background: tab === realIdx ? '#1e3a14' : 'rgba(30,58,20,0.25)',
+                border: `1px solid ${tab === realIdx ? '#3a6228' : '#8ab87a'}`,
+                borderBottom: tab === realIdx ? '1px solid #1e3a14' : '1px solid #8ab87a',
+                color: tab === realIdx ? '#a3d982' : '#3a5a28',
+              }}>
+              {t.icon} {t.label}
+            </button>
+          )
+        })}
       </div>
 
       <div className="flex-1 p-4 pt-3 rounded-b-xl" style={{ border: '1px solid #8ab87a', borderTop: 'none', background: 'rgba(255,255,255,0.55)', backdropFilter: 'blur(4px)' }}>
@@ -1520,18 +1561,21 @@ export default function PlaneacionPage() {
                   onMouseLeave={fcMouseLeave}
                   className="overflow-x-auto rounded-xl select-none shadow-sm"
                   style={{ border:'1px solid #a0c878', cursor:'grab', scrollbarWidth:'thin', scrollbarColor:'#8ab87a #d4e8b8' }}>
-                  <table className="text-xs" style={{ minWidth: `${200 + semanas.length * 252}px`, borderCollapse: 'separate', borderSpacing: 0 }}>
+                  <table className="text-xs" style={{ minWidth: `${312 + semanasVis.length * 84}px`, borderCollapse: 'separate', borderSpacing: 0 }}>
                     <thead>
                       {/* Row 1: weeks */}
                       <tr style={{ background: '#1e3a14', borderBottom: '1px solid #2e5a20' }}>
-                        <th className="px-3 py-2 text-left sticky left-0 z-20 w-48" style={{ background: '#1e3a14', minWidth: 240, borderRight: '2px solid #4a8a30', boxShadow: '3px 0 6px rgba(0,0,0,0.15)' }}>
+                        <th className="px-3 py-2 text-left sticky left-0 z-20 w-48" style={{ background: '#1e3a14', minWidth: 240 }}>
                           <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#a3d982' }}>PRODUCTO</span>
                         </th>
-                        {semanas.map(s => {
+                        <th className="px-2 py-2 text-center sticky z-20" style={{ background: '#1e3a14', minWidth: 72, left: 240, borderRight: '2px solid #4a8a30', boxShadow: '3px 0 6px rgba(0,0,0,0.15)' }}>
+                          <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#e8b870' }}>INV.</span>
+                        </th>
+                        {semanasVis.map(s => {
                           const d = isoToDate(s)
                           return (
-                            <th key={s} colSpan={3} className="px-2 py-2 text-center font-bold whitespace-nowrap"
-                              style={{ color: '#a3d982', borderLeft: '1px solid #2e5a20', minWidth: 252 }}>
+                            <th key={s} className="px-2 py-2 text-center font-bold whitespace-nowrap"
+                              style={{ color: '#a3d982', borderLeft: '1px solid #2e5a20', minWidth: 84 }}>
                               SEM {getISOWeek(d)} · {fmtShortDate(s)}
                             </th>
                           )
@@ -1539,19 +1583,18 @@ export default function PlaneacionPage() {
                       </tr>
                       {/* Row 2: sub-headers */}
                       <tr style={{ background: '#264a18', borderBottom: '2px solid #3a6228' }}>
-                        <th className="sticky left-0 z-20" style={{ background: '#264a18', borderRight: '2px solid #4a8a30', boxShadow: '3px 0 6px rgba(0,0,0,0.15)' }} />
-                        {semanas.map(s => (
-                          ['PEDIDO','PROD','SALDO'].map(h => (
-                            <th key={`${s}_${h}`} className="px-2 py-1.5 text-center font-bold uppercase"
-                              style={{
-                                color: h==='PEDIDO'?'#7ab5e8':h==='PROD'?'#a3d982':'#e8b870',
-                                borderLeft: h==='PEDIDO'?'1px solid #3a6228':'none',
-                                fontSize: '0.6rem',
-                                minWidth: 84,
-                              }}>
-                              {h}
-                            </th>
-                          ))
+                        <th className="sticky left-0 z-20" style={{ background: '#264a18' }} />
+                        <th className="sticky z-20" style={{ background: '#264a18', left: 240, borderRight: '2px solid #4a8a30', boxShadow: '3px 0 6px rgba(0,0,0,0.15)', minWidth: 72 }} />
+                        {semanasVis.map(s => (
+                          <th key={`${s}_PROYECTADO`} className="px-2 py-1.5 text-center font-bold uppercase"
+                            style={{
+                              color: '#7ab5e8',
+                              borderLeft: '1px solid #3a6228',
+                              fontSize: '0.6rem',
+                              minWidth: 84,
+                            }}>
+                            PROYECTADO
+                          </th>
                         ))}
                       </tr>
                     </thead>
@@ -1561,43 +1604,48 @@ export default function PlaneacionPage() {
                         const q = filtroFc.toLowerCase()
                         return p.referencia.toLowerCase().includes(q) || (p.descripcion??'').toLowerCase().includes(q)
                       }).map((prod, pi) => {
-                        const saldos = getSaldos(prod.referencia)
+                        const saldoDmActual = getSaldosDemanda(prod.referencia)[fcOffset]
                         return (
                           <tr key={prod.referencia}
                             style={{ background: pi%2===0?'#ffffff':'#f0f7e4', borderBottom:'1px solid #d0e8b0' }}>
                             {/* Product name */}
                             <td className="px-3 py-2 sticky left-0 z-10"
-                              style={{ background: pi%2===0?'#ffffff':'#f0f7e4', minWidth: 240, borderRight: '2px solid #8ab87a', boxShadow: '3px 0 6px rgba(0,0,0,0.08)' }}>
+                              style={{ background: pi%2===0?'#ffffff':'#f0f7e4', minWidth: 240 }}>
                               <div className="font-mono font-bold text-xs" style={{ color: '#1e5a3a' }}>{prod.referencia}</div>
                               <div style={{ fontSize: '0.65rem', color: '#5a7a42' }}>{prod.descripcion??'—'}</div>
                             </td>
-                            {semanas.map((s, si) => {
+                            {/* INV. — saldo de demanda en semana actual */}
+                            <td className="px-2 py-1.5 text-center font-mono font-bold text-xs sticky z-10"
+                              style={{ background: pi%2===0?'#ffffff':'#f0f7e4', left: 240, minWidth: 72,
+                                color: saldoDmActual === null ? '#8a9a80' : saldoDmActual > 0 ? '#2a6a1e' : '#c04030',
+                                borderRight: '2px solid #8ab87a', boxShadow: '3px 0 6px rgba(0,0,0,0.08)' }}>
+                              {saldoDmActual !== null && saldoDmActual !== 0 ? saldoDmActual.toLocaleString('es-CO') : '—'}
+                            </td>
+                            {semanasVis.map((s) => {
                               const key = `${prod.referencia}_${s}`
-                              const { pedido = 0, produccion = 0 } = planData[key] ?? {}
-                              const saldo = saldos[si]
+                              const { pedido = 0 } = planData[key] ?? {}
                               return (
-                                <>
-                                  {/* PEDIDO */}
-                                  <td key={`${key}_p`} className="py-1.5 text-center relative group/com"
-                                    style={{ borderLeft: '1px solid #c0dca0', background: 'rgba(74,122,181,0.08)', minWidth: 84 }}>
-                                    {/* Comment triangle indicator */}
-                                    {comentarios[key] && (
-                                      <div className="absolute top-0 right-0 w-0 h-0 z-10"
-                                        style={{ borderStyle:'solid', borderWidth:'0 9px 9px 0', borderColor:'transparent #e8a030 transparent transparent' }}
-                                        title={`${comentarios[key].autor ? comentarios[key].autor + ': ' : ''}${comentarios[key].texto}`}
-                                      />
-                                    )}
-                                    <input
-                                      type="number"
-                                      value={pedido || ''}
-                                      placeholder="—"
-                                      onChange={e => updateCell(prod.referencia, s, 'pedido', e.target.value)}
-                                      className="w-20 text-center text-xs font-mono rounded px-1 py-0.5 focus:outline-none"
-                                      style={{ background: 'transparent', border: '1px solid transparent', color: '#2a5a8a' }}
-                                      onFocus={e => (e.target as HTMLInputElement).style.borderColor = '#4a7ab5'}
-                                      onBlur={e => (e.target as HTMLInputElement).style.borderColor = 'transparent'}
+                                <td key={`${key}_p`} className="py-1.5 text-center relative group/com"
+                                  style={{ borderLeft: '1px solid #c0dca0', background: 'rgba(74,122,181,0.08)', minWidth: 84 }}>
+                                  {comentarios[key] && (
+                                    <div className="absolute top-0 right-0 w-0 h-0 z-10"
+                                      style={{ borderStyle:'solid', borderWidth:'0 9px 9px 0', borderColor:'transparent #e8a030 transparent transparent' }}
+                                      title={`${comentarios[key].autor ? comentarios[key].autor + ': ' : ''}${comentarios[key].texto}`}
                                     />
-                                    {/* Comment button */}
+                                  )}
+                                  <input
+                                    type="number"
+                                    value={pedido || ''}
+                                    placeholder="—"
+                                    readOnly={perfil === 'comercial'}
+                                    onChange={perfil === 'comercial' ? undefined : e => updateCell(prod.referencia, s, 'pedido', e.target.value)}
+                                    className="w-20 text-center text-xs font-mono rounded px-1 py-0.5 focus:outline-none"
+                                    style={{ background: 'transparent', border: '1px solid transparent', color: '#2a5a8a',
+                                      cursor: perfil === 'comercial' ? 'default' : undefined }}
+                                    onFocus={perfil === 'comercial' ? undefined : e => (e.target as HTMLInputElement).style.borderColor = '#4a7ab5'}
+                                    onBlur={perfil === 'comercial' ? undefined : e => (e.target as HTMLInputElement).style.borderColor = 'transparent'}
+                                  />
+                                  {perfil !== 'comercial' && (
                                     <button
                                       onClick={() => {
                                         const d = isoToDate(s)
@@ -1610,34 +1658,8 @@ export default function PlaneacionPage() {
                                       title="Agregar / editar comentario">
                                       <MessageSquare size={9} />
                                     </button>
-                                  </td>
-                                  {/* PROD */}
-                                  <td key={`${key}_pr`} className="py-1.5 text-center"
-                                    style={{ background: 'rgba(58,114,40,0.08)', minWidth: 84 }}>
-                                    <input
-                                      type="number"
-                                      value={produccion || ''}
-                                      placeholder="—"
-                                      onChange={e => updateCell(prod.referencia, s, 'produccion', e.target.value)}
-                                      className="w-20 text-center text-xs font-mono rounded px-1 py-0.5 focus:outline-none"
-                                      style={{ background: 'transparent', border: '1px solid transparent', color: '#2a6a1e' }}
-                                      onFocus={e => (e.target as HTMLInputElement).style.borderColor = '#3a7228'}
-                                      onBlur={e => (e.target as HTMLInputElement).style.borderColor = 'transparent'}
-                                    />
-                                  </td>
-                                  {/* SALDO */}
-                                  <td key={`${key}_s`} className="px-2 py-1.5 text-center font-mono font-bold text-xs"
-                                    style={{
-                                      background: 'rgba(160,104,40,0.08)',
-                                      minWidth: 84,
-                                      color: saldo === null ? '#c0ceb0'
-                                        : saldo > 0 ? '#2a6a1e'
-                                        : saldo < 0 ? '#c04030'
-                                        : '#8a9a80',
-                                    }}>
-                                    {saldo !== null && saldo !== 0 ? saldo.toLocaleString('es-CO') : '—'}
-                                  </td>
-                                </>
+                                  )}
+                                </td>
                               )
                             })}
                           </tr>
@@ -1647,7 +1669,7 @@ export default function PlaneacionPage() {
                   </table>
                 </div>
                 <p className="text-xs mt-2 text-right" style={{ color: '#8a9a80' }}>
-                  {inventario.length} productos · SALDO = saldo anterior + PROD − PEDIDO
+                  {inventario.length} productos
                 </p>
               </>
             )}
@@ -2234,7 +2256,7 @@ export default function PlaneacionPage() {
                 onMouseLeave={dmMouseLeave}
                 className="overflow-x-auto rounded-xl select-none shadow-sm"
                 style={{ border:'1px solid #a0c878', cursor:'grab', scrollbarWidth:'thin', scrollbarColor:'#8ab87a #d4e8b8' }}>
-                <table className="text-xs" style={{ minWidth: `${312 + semanas.length * 336}px`, borderCollapse: 'separate', borderSpacing: 0 }}>
+                <table className="text-xs" style={{ minWidth: `${312 + semanasVisDm.length * 336}px`, borderCollapse: 'separate', borderSpacing: 0 }}>
                   <thead>
                     {/* Row 1: semanas */}
                     <tr style={{ background: '#1e3a14', borderBottom: '1px solid #2e5a20' }}>
@@ -2244,7 +2266,7 @@ export default function PlaneacionPage() {
                       <th className="px-2 py-2 text-center sticky z-20" style={{ background: '#1e3a14', minWidth: 72, left: 240, borderRight: '2px solid #4a8a30', boxShadow: '3px 0 6px rgba(0,0,0,0.15)' }}>
                         <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#e8b870' }}>INV.</span>
                       </th>
-                      {semanas.map(s => {
+                      {semanasVisDm.map(s => {
                         const d = isoToDate(s)
                         return (
                           <th key={s} colSpan={4} className="px-2 py-2 text-center font-bold whitespace-nowrap"
@@ -2258,7 +2280,7 @@ export default function PlaneacionPage() {
                     <tr style={{ background: '#264a18', borderBottom: '2px solid #3a6228' }}>
                       <th className="sticky left-0 z-20" style={{ background: '#264a18' }} />
                       <th className="sticky z-20" style={{ background: '#264a18', left: 240, borderRight: '2px solid #4a8a30', boxShadow: '3px 0 6px rgba(0,0,0,0.15)', minWidth: 72 }} />
-                      {semanas.map(s => (
+                      {semanasVisDm.map(s => (
                         ['PROYECTADO','PEDIDO','PROD','SALDO'].map(h => (
                           <th key={`${s}_${h}`} className="px-2 py-1.5 text-center font-bold uppercase"
                             style={{
@@ -2297,13 +2319,17 @@ export default function PlaneacionPage() {
                               borderRight: '2px solid #8ab87a', boxShadow: '3px 0 6px rgba(0,0,0,0.08)' }}>
                             {(prod.existencia ?? 0) > 0 ? (prod.existencia).toLocaleString('es-CO') : '—'}
                           </td>
-                          {semanas.map((s, si) => {
+                          {semanasVisDm.map((s, vi) => {
                             const planKey = `${ref}_${s}`
-                            const proyectado = planData[planKey]?.pedido ?? 0
-                            const pedidoOv   = demandaOverride[`${ref}|${s}`]
-                            const pedido     = pedidoOv ?? 0
-                            const produccion = planData[planKey]?.produccion ?? 0
-                            const saldo      = saldos[si]
+                            const demKey      = `${ref}|${s}`
+                            const proyectado  = planData[planKey]?.pedido ?? 0
+                            const pedidoOv    = demandaOverride[demKey]
+                            const pedido      = pedidoOv ?? 0
+                            const prodFc      = planData[planKey]?.produccion ?? 0
+                            const hasProdOv   = demKey in demandaProdOv
+                            const prodOvVal   = demandaProdOv[demKey] ?? 0
+                            const produccion  = hasProdOv ? prodOvVal : prodFc
+                            const saldo       = saldos[dmOffset + vi]
                             return (
                               <>
                                 {/* PROYECTADO */}
@@ -2345,10 +2371,25 @@ export default function PlaneacionPage() {
                                   </button>
                                 </td>
                                 {/* PROD */}
-                                <td key={`${s}_prod`} className="px-2 py-1.5 text-center font-mono text-xs"
-                                  style={{ background:'rgba(58,114,40,0.08)', minWidth: 84,
-                                    color: produccion > 0 ? '#2a6a1e' : '#c0ceb0' }}>
-                                  {produccion > 0 ? produccion.toLocaleString('es-CO') : '—'}
+                                <td key={`${s}_prod`} className="py-1.5 text-center relative group/prod"
+                                  style={{ background:'rgba(58,114,40,0.08)', minWidth: 84 }}>
+                                  <input
+                                    type="number" min={0}
+                                    value={produccion || ''}
+                                    placeholder={prodFc > 0 ? prodFc.toLocaleString('es-CO') : '—'}
+                                    onChange={e => saveProdDemandaOv(ref, s, e.target.value)}
+                                    className="w-20 text-center text-xs font-mono rounded px-1 py-0.5 focus:outline-none"
+                                    style={{ background:'transparent', border:'1px solid transparent',
+                                      color: hasProdOv ? (prodOvVal > 0 ? '#2a6a1e' : '#c0ceb0') : (prodFc > 0 ? '#2a6a1e' : '#c0ceb0') }}
+                                    onFocus={e => (e.target as HTMLInputElement).style.borderColor = '#3a7228'}
+                                    onBlur={e => (e.target as HTMLInputElement).style.borderColor = 'transparent'}
+                                    title={hasProdOv && prodFc > 0 ? `Forecast: ${prodFc.toLocaleString('es-CO')} · Borrar para restaurar` : 'Modificar producción en Demanda'}
+                                  />
+                                  {hasProdOv && prodFc > 0 && (
+                                    <div className="absolute top-0 left-0 w-0 h-0"
+                                      style={{ borderStyle:'solid', borderWidth:'6px 6px 0 0', borderColor:'#3a7228 transparent transparent transparent' }}
+                                      title={`Forecast original: ${prodFc.toLocaleString('es-CO')}`} />
+                                  )}
                                 </td>
                                 {/* SALDO */}
                                 <td key={`${s}_sal`} className="px-2 py-1.5 text-center font-mono font-bold text-xs"

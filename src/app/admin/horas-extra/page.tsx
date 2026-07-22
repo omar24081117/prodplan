@@ -743,7 +743,8 @@ export default function HorasExtraPage() {
             </thead>
             <tbody>
               {registrosFiltrados.map((r, i) => {
-                const tieneExtra = r.minutos_extra > 0
+                const tieneNocturnas = (overrides[r.cedula]?.horas_nocturnas_manual ?? 0) > 0
+                const tieneExtra = r.minutos_extra > 0 || tieneNocturnas
                 const rowBg = r.aprobado
                   ? '#0a1f10'
                   : r.rechazado ? '#1a0505'
