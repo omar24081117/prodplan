@@ -33,6 +33,7 @@ type Registro = {
   minutos_extra: number
   horas_extra: number
   horas_recargo: number
+  dia_libre: boolean
   aprobado: boolean
   aprobado_por_nombre: string | null
   aprobado_en: string | null
@@ -770,7 +771,9 @@ export default function HorasExtraPage() {
 
                     {/* TURNO */}
                     <td className="px-2 py-2">
-                      {overrides[r.cedula] ? (
+                      {r.dia_libre ? (
+                        <span className="font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgba(234,179,8,0.2)', color: '#fbbf24', fontSize:'0.6rem' }}>LIBRE</span>
+                      ) : overrides[r.cedula] ? (
                         <span className="font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgba(14,116,144,0.3)', color: '#67e8f9', fontSize:'0.6rem' }}>MAN</span>
                       ) : r.turno ? (
                         <span className={`font-bold px-1.5 py-0.5 rounded ${r.turno === 'T1' ? 'bg-blue-900/50 text-blue-300' : 'bg-purple-900/50 text-purple-300'}`}>{r.turno}</span>

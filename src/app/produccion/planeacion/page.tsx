@@ -399,6 +399,7 @@ export default function PlaneacionPage() {
 
   // ── Plan Diario (tab 4) ─────────────────────────────────────────────────
   const hoyLunes = toISO(getMonday(new Date()))
+  const fcIdxAct = semanas.indexOf(hoyLunes)
   const [semDiario, setSemDiario]         = useState(hoyLunes)
   const [filtroDiario, setFiltroDiario]   = useState('')
   const [diaFiltro, setDiaFiltro]         = useState<string | null>(null)
@@ -501,7 +502,7 @@ export default function PlaneacionPage() {
   useEffect(() => { cargarInventario() }, [cargarInventario])
   useEffect(() => { if (tab === 0 || tab === 1 || tab === 2 || tab === 3) cargarPlan() }, [tab, cargarPlan])
   useEffect(() => { if (tab === 2 || tab === 5) cargarActividades() }, [tab, cargarActividades])
-  useEffect(() => { if (tab === 1 || tab === 3) cargarDemanda() }, [tab])
+  useEffect(() => { if (tab === 0 || tab === 1 || tab === 3) cargarDemanda() }, [tab])
   // Scroll to current week once data finishes loading (avoids scroll reset on re-render)
   useEffect(() => {
     if (tab === 0 && !loadingPlan) setTimeout(fcScrollToToday, 0)
@@ -1249,7 +1250,7 @@ export default function PlaneacionPage() {
     const pedidoDe = (s: string) => {
       const pedidoManual = demandaOverride[`${ref}|${s}`]
       const proyectado   = planData[`${ref}_${s}`]?.pedido ?? 0
-      return (pedidoManual !== undefined && pedidoManual > 0) ? pedidoManual : proyectado
+      return pedidoManual !== undefined ? pedidoManual : proyectado
     }
     const prodDe = (s: string) => {
       const ovKey = `${ref}|${s}`
@@ -1561,21 +1562,24 @@ export default function PlaneacionPage() {
                   onMouseLeave={fcMouseLeave}
                   className="overflow-x-auto rounded-xl select-none shadow-sm"
                   style={{ border:'1px solid #a0c878', cursor:'grab', scrollbarWidth:'thin', scrollbarColor:'#8ab87a #d4e8b8' }}>
-                  <table className="text-xs" style={{ minWidth: `${312 + semanasVis.length * 84}px`, borderCollapse: 'separate', borderSpacing: 0 }}>
+                  <table className="text-xs" style={{ minWidth: `${472 + semanasVis.length * 168}px`, borderCollapse: 'separate', borderSpacing: 0 }}>
                     <thead>
                       {/* Row 1: weeks */}
                       <tr style={{ background: '#1e3a14', borderBottom: '1px solid #2e5a20' }}>
                         <th className="px-3 py-2 text-left sticky left-0 z-20 w-48" style={{ background: '#1e3a14', minWidth: 240 }}>
                           <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#a3d982' }}>PRODUCTO</span>
                         </th>
-                        <th className="px-2 py-2 text-center sticky z-20" style={{ background: '#1e3a14', minWidth: 72, left: 240, borderRight: '2px solid #4a8a30', boxShadow: '3px 0 6px rgba(0,0,0,0.15)' }}>
-                          <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#e8b870' }}>INV.</span>
+                        <th className="px-2 py-2 text-center sticky z-20" style={{ background: '#1e3a14', minWidth: 120, left: 240 }}>
+                          <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#e8b870' }}>INVENTARIO DISPONIBLE</span>
+                        </th>
+                        <th className="px-2 py-2 text-center sticky z-20" style={{ background: '#1e3a14', minWidth: 112, left: 360, borderRight: '2px solid #4a8a30', boxShadow: '3px 0 6px rgba(0,0,0,0.15)' }}>
+                          <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#7ab5e8' }}>TOTAL<br/>PROYECTADO</span>
                         </th>
                         {semanasVis.map(s => {
                           const d = isoToDate(s)
                           return (
-                            <th key={s} className="px-2 py-2 text-center font-bold whitespace-nowrap"
-                              style={{ color: '#a3d982', borderLeft: '1px solid #2e5a20', minWidth: 84 }}>
+                            <th key={s} colSpan={2} className="px-2 py-2 text-center font-bold whitespace-nowrap"
+                              style={{ color: '#a3d982', borderLeft: '1px solid #2e5a20', minWidth: 168 }}>
                               SEM {getISOWeek(d)} · {fmtShortDate(s)}
                             </th>
                           )
@@ -1584,17 +1588,19 @@ export default function PlaneacionPage() {
                       {/* Row 2: sub-headers */}
                       <tr style={{ background: '#264a18', borderBottom: '2px solid #3a6228' }}>
                         <th className="sticky left-0 z-20" style={{ background: '#264a18' }} />
-                        <th className="sticky z-20" style={{ background: '#264a18', left: 240, borderRight: '2px solid #4a8a30', boxShadow: '3px 0 6px rgba(0,0,0,0.15)', minWidth: 72 }} />
+                        <th className="sticky z-20" style={{ background: '#264a18', left: 240, minWidth: 120 }} />
+                        <th className="sticky z-20" style={{ background: '#264a18', left: 360, borderRight: '2px solid #4a8a30', boxShadow: '3px 0 6px rgba(0,0,0,0.15)', minWidth: 112 }} />
                         {semanasVis.map(s => (
-                          <th key={`${s}_PROYECTADO`} className="px-2 py-1.5 text-center font-bold uppercase"
-                            style={{
-                              color: '#7ab5e8',
-                              borderLeft: '1px solid #3a6228',
-                              fontSize: '0.6rem',
-                              minWidth: 84,
-                            }}>
-                            PROYECTADO
-                          </th>
+                          <React.Fragment key={s}>
+                            <th className="px-2 py-1.5 text-center font-bold uppercase"
+                              style={{ color: '#7ab5e8', borderLeft: '1px solid #3a6228', fontSize: '0.6rem', minWidth: 84 }}>
+                              PROYECTADO
+                            </th>
+                            <th className="px-2 py-1.5 text-center font-bold uppercase"
+                              style={{ color: '#e8a030', fontSize: '0.6rem', minWidth: 84 }}>
+                              PEDIDO
+                            </th>
+                          </React.Fragment>
                         ))}
                       </tr>
                     </thead>
@@ -1603,29 +1609,37 @@ export default function PlaneacionPage() {
                         if (!filtroFc) return true
                         const q = filtroFc.toLowerCase()
                         return p.referencia.toLowerCase().includes(q) || (p.descripcion??'').toLowerCase().includes(q)
-                      }).map((prod, pi) => {
-                        const saldoDmActual = getSaldosDemanda(prod.referencia)[fcOffset]
-                        return (
-                          <tr key={prod.referencia}
-                            style={{ background: pi%2===0?'#ffffff':'#f0f7e4', borderBottom:'1px solid #d0e8b0' }}>
-                            {/* Product name */}
-                            <td className="px-3 py-2 sticky left-0 z-10"
-                              style={{ background: pi%2===0?'#ffffff':'#f0f7e4', minWidth: 240 }}>
-                              <div className="font-mono font-bold text-xs" style={{ color: '#1e5a3a' }}>{prod.referencia}</div>
-                              <div style={{ fontSize: '0.65rem', color: '#5a7a42' }}>{prod.descripcion??'—'}</div>
-                            </td>
-                            {/* INV. — saldo de demanda en semana actual */}
+                      }).map((prod, pi) => (
+                        <tr key={prod.referencia} style={{ background: pi%2===0 ? '#ffffff' : '#f0f7e4', borderBottom:'1px solid #d0e8b0' }}>
+                          {/* Product name */}
+                          <td className="px-3 py-2 sticky left-0 z-10" style={{ background: pi%2===0 ? '#ffffff' : '#f0f7e4', minWidth: 240 }}>
+                            <div className="font-mono font-bold text-xs" style={{ color: '#1e5a3a' }}>{prod.referencia}</div>
+                            <div style={{ fontSize: '0.65rem', color: '#5a7a42' }}>{prod.descripcion??'—'}</div>
+                          </td>
+                          {/* INV. — saldo Demanda semana en curso */}
+                          {((inv) => (
                             <td className="px-2 py-1.5 text-center font-mono font-bold text-xs sticky z-10"
-                              style={{ background: pi%2===0?'#ffffff':'#f0f7e4', left: 240, minWidth: 72,
-                                color: saldoDmActual === null ? '#8a9a80' : saldoDmActual > 0 ? '#2a6a1e' : '#c04030',
-                                borderRight: '2px solid #8ab87a', boxShadow: '3px 0 6px rgba(0,0,0,0.08)' }}>
-                              {saldoDmActual !== null && saldoDmActual !== 0 ? saldoDmActual.toLocaleString('es-CO') : '—'}
+                              style={{ background: pi%2===0 ? '#ffffff' : '#f0f7e4', left: 240, minWidth: 120,
+                                color: inv === null ? '#8a9a80' : inv > 0 ? '#2a6a1e' : '#c04030' }}>
+                              {inv !== null && inv !== 0 ? inv.toLocaleString('es-CO') : '—'}
                             </td>
-                            {semanasVis.map((s) => {
-                              const key = `${prod.referencia}_${s}`
-                              const { pedido = 0 } = planData[key] ?? {}
-                              return (
-                                <td key={`${key}_p`} className="py-1.5 text-center relative group/com"
+                          ))(fcIdxAct >= 0 ? (getSaldosDemanda(prod.referencia)[fcIdxAct] ?? null) : null)}
+                          {((total) => (
+                            <td className="px-2 py-1.5 text-center font-mono font-bold text-xs sticky z-10"
+                              style={{ background: pi%2===0 ? '#ffffff' : '#f0f7e4', left: 360, minWidth: 112,
+                                color: total > 0 ? '#2a5a8a' : '#b0b8a8',
+                                borderRight: '2px solid #8ab87a', boxShadow: '3px 0 6px rgba(0,0,0,0.08)' }}>
+                              {total > 0 ? total.toLocaleString('es-CO') : '—'}
+                            </td>
+                          ))(semanas.filter(s => s > hoyLunes).reduce((acc, s) => acc + (planData[`${prod.referencia}_${s}`]?.pedido ?? 0), 0))}
+                          {semanasVis.map((s) => {
+                            const key = `${prod.referencia}_${s}`
+                            const { pedido = 0 } = planData[key] ?? {}
+                            const pedidoDemanda = demandaOverride[`${prod.referencia}|${s}`] ?? 0
+                            return (
+                              <React.Fragment key={s}>
+                                {/* PROYECTADO */}
+                                <td className="py-1.5 text-center relative group/com"
                                   style={{ borderLeft: '1px solid #c0dca0', background: 'rgba(74,122,181,0.08)', minWidth: 84 }}>
                                   {comentarios[key] && (
                                     <div className="absolute top-0 right-0 w-0 h-0 z-10"
@@ -1660,11 +1674,17 @@ export default function PlaneacionPage() {
                                     </button>
                                   )}
                                 </td>
-                              )
-                            })}
-                          </tr>
-                        )
-                      })}
+                                {/* PEDIDO — de Demanda */}
+                                <td className="px-2 py-1.5 text-center font-mono text-xs"
+                                  style={{ background: 'rgba(232,160,48,0.07)', minWidth: 84,
+                                    color: pedidoDemanda > 0 ? '#b07820' : '#b0b8a8' }}>
+                                  {pedidoDemanda > 0 ? pedidoDemanda.toLocaleString('es-CO') : '—'}
+                                </td>
+                              </React.Fragment>
+                            )
+                          })}
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>

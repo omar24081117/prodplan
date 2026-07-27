@@ -27,7 +27,7 @@ const SESSION_KEY   = 'alistamiento_usuario'
 const ROLES_OK      = ['Almacenista', 'Director', 'Gerencia']
 
 function getEstado(p: Pedido): 'PENDIENTE' | 'VENCIDO' | 'DESPACHADO' {
-  if (p.fecha_despacho) return 'DESPACHADO'
+  if (p.fecha_despacho && p.entrega_tipo !== 'PARCIAL') return 'DESPACHADO'
   const hoy = new Date().toISOString().split('T')[0]
   if (p.fecha_max_entrega && p.fecha_max_entrega < hoy) return 'VENCIDO'
   return 'PENDIENTE'

@@ -10,6 +10,13 @@ const toMins = (t: string) => {
 
 const MESES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 
+const LUNES_LIBRE_DESDE = '2026-07-27'
+function esLunesLibre(fecha: string): boolean {
+  if (fecha < LUNES_LIBRE_DESDE) return false
+  const [y, mo, d] = fecha.split('-').map(Number)
+  return new Date(y, mo - 1, d).getDay() === 1
+}
+
 function fmtFecha(f: string) {
   const [y, m, d] = f.split('-')
   return `${d}/${MESES[parseInt(m) - 1]}/${y}`
@@ -20,6 +27,7 @@ function calcular(
   horaSalida: string | null,
   horaEfectiva: string | null,
   horasExtraManual?: number | null,
+  diaLibre?: boolean,
 ): {
   entradaNorm: string
   salidaNorm: string
@@ -44,6 +52,19 @@ function calcular(
   }
 
   const inMins = toMins(horaIngreso ?? '')
+
+  // Día libre (lunes): todas las horas trabajadas son extras
+  if (diaLibre && horaSalida && inMins >= 0) {
+    const outMins = toMins(horaSalida)
+    const minutosExtra = Math.max(0, outMins - inMins)
+    const horasExtra = Math.round((minutosExtra / 60) * 100) / 100
+    let horasRecargo = 0
+    if (outMins >= 22 * 60 + 30) {
+      horasRecargo = Math.round((Math.max(0, outMins - 19 * 60) / 60) * 100) / 100
+    }
+    return { entradaNorm: '—', salidaNorm: '—', salidaEfectiva: horaSalida, minutosExtra, horasExtra, horasRecargo }
+  }
+
   let entradaNorm = '—', salidaNorm = '—', salidaNormMins = -1
 
   if (inMins >= 300 && inMins <= 450) {
@@ -203,8 +224,11 @@ export async function GET(request: NextRequest) {
     const horaEfectiva = ov?.salida_efectiva ?? null
     const hsManual     = ov?.horas_extra_manual ?? null
 
+    // Día libre si es lunes ≥ 2026-07-27 y el empleado es Operario (o Temporal — ya filtrado por contrato)
+    const diaLibre = esLunesLibre(a.fecha) && (contrato === 'Temporal' || rolMap[a.cedula] === 'Operario')
+
     const { entradaNorm, salidaNorm, salidaEfectiva, minutosExtra, horasExtra, horasRecargo } =
-      calcular(horaIngreso, horaSalida, horaEfectiva, hsManual)
+      calcular(horaIngreso, horaSalida, horaEfectiva, hsManual, diaLibre)
 
     let estadoHE = ''
     if (esAprobado) {

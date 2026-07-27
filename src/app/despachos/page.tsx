@@ -62,7 +62,7 @@ function fmtDate(iso: string | null | undefined): string {
 const hoyBogota = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
 
 function getEstado(d: Despacho): Estado {
-  if (d.fecha_despacho) return 'DESPACHADO'
+  if (d.fecha_despacho && d.entrega_tipo !== 'PARCIAL') return 'DESPACHADO'
   const today = hoyBogota()
   if (d.fecha_max_entrega && d.fecha_max_entrega < today) return 'VENCIDO'
   return 'PENDIENTE'
