@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, Upload, Loader2, X, AlertTriangle, Package,
-  BarChart2, Calendar, ListChecks, RefreshCw, Construction, Trash2, MessageSquare, Download
+  BarChart2, Calendar, ListChecks, RefreshCw, Construction, Trash2, MessageSquare, Download, Truck, Plus
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
 
@@ -167,7 +167,19 @@ create table if not exists public.plan_comentarios (
   primary key (referencia, semana_inicio)
 );
 alter table public.plan_comentarios enable row level security;
-create policy "plan_com_all" on public.plan_comentarios for all using (true) with check (true);`
+create policy "plan_com_all" on public.plan_comentarios for all using (true) with check (true);
+
+create table if not exists public.despachos_almacen (
+  id uuid primary key default gen_random_uuid(),
+  referencia text not null,
+  descripcion text,
+  cantidad numeric not null,
+  fecha date not null,
+  semana_inicio date not null,
+  creado_en timestamptz default now()
+);
+alter table public.despachos_almacen enable row level security;
+create policy "despachos_all" on public.despachos_almacen for all using (true) with check (true);`
 
 /* ──────────────────────────────────────────────────────────────────────────
    Actividades table — memoized so modal state changes don't re-render it
@@ -446,6 +458,17 @@ export default function PlaneacionPage() {
   const [commentAuthor, setCommentAuthor] = useState('')
   const [savingComment, setSavingComment] = useState(false)
 
+  // ── Despachos (Entregas al Almacén) ────────────────────────────────────
+  type Despacho = { id: string; referencia: string; descripcion: string | null; cantidad: number; fecha: string; semana_inicio: string; creado_en: string }
+  const [despachos, setDespachos]           = useState<Despacho[]>([])
+  const [despMap, setDespMap]               = useState<Record<string, number>>({})  // ${ref}_${semana} → total
+  const [loadingDespachos, setLoadingDesp]  = useState(false)
+  const [savingDespacho, setSavingDesp]     = useState(false)
+  const [modalDesp, setModalDesp]           = useState<{ ref: string; desc: string } | null>(null)
+  const [despRef, setDespRef]               = useState('')
+  const [despCantidad, setDespCantidad]     = useState('')
+  const [despFecha, setDespFecha]           = useState(() => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }))
+
   /* ── Load data ─────────────────────────────────────────────────────────── */
   const cargarInventario = useCallback(async () => {
     setLoadingInv(true)
@@ -523,9 +546,30 @@ export default function PlaneacionPage() {
     setLoadingAct(false)
   }, [])
 
+  const cargarDespachos = useCallback(async (semana: string) => {
+    setLoadingDesp(true)
+    const res = await fetch(`/api/planeacion/despachos?semana=${semana}`)
+    if (res.ok) setDespachos(await res.json())
+    setLoadingDesp(false)
+  }, [])
+
+  const cargarDespMap = useCallback(async () => {
+    const res = await fetch('/api/planeacion/despachos')
+    if (!res.ok) return
+    const rows: Despacho[] = await res.json()
+    const map: Record<string, number> = {}
+    for (const d of rows) {
+      const key = `${d.referencia}_${d.semana_inicio}`
+      map[key] = (map[key] ?? 0) + d.cantidad
+    }
+    setDespMap(map)
+  }, [])
+
   useEffect(() => { cargarInventario() }, [cargarInventario])
   useEffect(() => { if (tab === 0 || tab === 1 || tab === 2 || tab === 3) cargarPlan() }, [tab, cargarPlan])
-  useEffect(() => { if (tab === 2 || tab === 5) cargarActividades() }, [tab, cargarActividades])
+  useEffect(() => { if (tab === 2 || tab === 6) cargarActividades() }, [tab, cargarActividades])
+  useEffect(() => { if (tab === 4) cargarDespachos(hoyLunes) }, [tab, hoyLunes, cargarDespachos])
+  useEffect(() => { if (tab === 1) cargarDespMap() }, [tab, cargarDespMap])
   useEffect(() => { if (tab === 0 || tab === 1 || tab === 3) cargarDemanda() }, [tab])
   // Scroll to current week once data finishes loading (avoids scroll reset on re-render)
   useEffect(() => {
@@ -1195,6 +1239,39 @@ export default function PlaneacionPage() {
       (actPorRef[r][0]?.descripcion_producto ?? '').toLowerCase().includes(filtroAct.toLowerCase())
     ), [actPorRef, filtroAct])
 
+  /* ── Despachos helpers ──────────────────────────────────────────────────── */
+  const despSemLabel = despFecha
+    ? `Sem ${getISOWeek(isoToDate(toISO(getMonday(new Date(despFecha + 'T12:00:00')))))} · ${toISO(getMonday(new Date(despFecha + 'T12:00:00')))}`
+    : '—'
+
+  async function guardarDespacho() {
+    if (!despRef || !despCantidad) return
+    setSavingDesp(true)
+    const semanaDesp = toISO(getMonday(new Date(despFecha + 'T12:00:00')))
+    const invItem = inventario.find(p => p.referencia === despRef)
+    const res = await fetch('/api/planeacion/despachos', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        referencia: despRef,
+        descripcion: invItem?.descripcion ?? null,
+        cantidad: Number(despCantidad),
+        fecha: despFecha,
+        semana_inicio: semanaDesp,
+      }),
+    })
+    if (res.ok) {
+      setModalDesp(null)
+      setDespRef('')
+      setDespCantidad('')
+      await Promise.all([cargarDespachos(hoyLunes), cargarInventario()])
+    } else {
+      const e = await res.json().catch(() => ({}))
+      setErrorMsg(e.error || 'Error al guardar')
+    }
+    setSavingDesp(false)
+  }
+
   /* ─────────────────────────────────────────────────────────────────────────
      RENDER
   ───────────────────────────────────────────────────────────────────────── */
@@ -1204,6 +1281,7 @@ export default function PlaneacionPage() {
     { label: 'Demanda',     icon: <Calendar size={14} />,  ocultarComercial: true  },
     { label: 'Plan Diario', icon: <BarChart2 size={14} />, ocultarComercial: true  },
     { label: 'Plan Mensual',icon: <Calendar size={14} />,  ocultarComercial: true  },
+    { label: 'Entregas',    icon: <Truck size={14} />,     ocultarComercial: true  },
   ]
 
   // FORECAST scroll — drag-to-scroll
@@ -1277,6 +1355,9 @@ export default function PlaneacionPage() {
       return pedidoManual !== undefined ? pedidoManual : proyectado
     }
     const prodDe = (s: string) => {
+      // Entregas al almacén tienen prioridad sobre PROD de planData
+      const despTotal = despMap[`${ref}_${s}`]
+      if (despTotal !== undefined) return despTotal
       const ovKey = `${ref}|${s}`
       if (ovKey in demandaProdOv) return demandaProdOv[ovKey] ?? 0
       return planData[`${ref}_${s}`]?.produccion ?? 0
@@ -1318,16 +1399,16 @@ export default function PlaneacionPage() {
           <h1 className="text-xl font-bold text-white">Planeación de Demanda e Inventario</h1>
         </div>
         <div className="flex items-center gap-2">
-          <button onClick={() => setTab(4)}
+          <button onClick={() => setTab(5)}
             className="px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors"
-            style={tab === 4
+            style={tab === 5
               ? { background: '#4caf50', color: '#fff' }
               : { background: 'rgba(80,180,60,0.15)', color: '#a3d982', border: '1px solid rgba(80,180,60,0.3)' }}>
             Inventario PT/BLK
           </button>
-          <button onClick={() => setTab(5)}
+          <button onClick={() => setTab(6)}
             className="px-3 py-1.5 rounded-xl text-sm font-semibold transition-colors"
-            style={tab === 5
+            style={tab === 6
               ? { background: '#4caf50', color: '#fff' }
               : { background: 'rgba(80,180,60,0.15)', color: '#a3d982', border: '1px solid rgba(80,180,60,0.3)' }}>
             Actividades
@@ -1382,9 +1463,128 @@ export default function PlaneacionPage() {
       <div className="flex-1 p-4 pt-3 rounded-b-xl" style={{ border: '1px solid #8ab87a', borderTop: 'none', background: 'rgba(255,255,255,0.55)', backdropFilter: 'blur(4px)' }}>
 
         {/* ══════════════════════════════════════════════════
-            TAB 4 — INVENTARIO (header)
+            TAB 4 — ENTREGAS AL ALMACÉN
         ══════════════════════════════════════════════════ */}
-        {tab === 4 && (
+        {tab === 4 && (() => {
+          const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
+          const despSemana = toISO(getMonday(new Date()))
+          const despPorRef: Record<string, number> = {}
+          for (const d of despachos) {
+            despPorRef[d.referencia] = (despPorRef[d.referencia] ?? 0) + d.cantidad
+          }
+          return (
+            <div>
+              {/* Header */}
+              <div className="flex items-center gap-3 mb-4 flex-wrap">
+                <h2 className="font-bold text-sm flex items-center gap-2" style={{ color: '#1e3a14' }}>
+                  <Truck size={15} /> Entregas al Almacén
+                </h2>
+                <span className="text-xs px-2 py-0.5 rounded-full font-mono" style={{ background: '#e0f0c8', color: '#3a6228', border: '1px solid #a0c878' }}>
+                  Sem {getISOWeek(isoToDate(despSemana))} · {fmtDMM(despSemana)}
+                </span>
+                <div className="ml-auto flex items-center gap-2">
+                  <button onClick={() => { setDespRef(''); setDespCantidad(''); setDespFecha(hoy); setModalDesp({ref:'', desc:''}) }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+                    style={{ background: '#1e3a14', color: '#a3d982', border: '1px solid #3a6228' }}>
+                    <Plus size={13} /> Nueva Entrega
+                  </button>
+                  <button onClick={() => cargarDespachos(despSemana)}
+                    className="p-1.5 rounded-lg"
+                    style={{ background: '#c8e0a8', border: '1px solid #8ab87a', color: '#1e3a14' }}>
+                    <RefreshCw size={13} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Tabla de referencias */}
+              {inventario.length === 0 ? (
+                <div className="text-center py-12 text-sm" style={{ color: '#6a8a50' }}>Carga el inventario primero (Inventario PT/BLK)</div>
+              ) : (
+                <div className="overflow-x-auto rounded-xl shadow-sm mb-6" style={{ border: '1px solid #a0c878' }}>
+                  <table className="text-xs w-full">
+                    <thead>
+                      <tr style={{ background: '#1e3a14', borderBottom: '2px solid #3a6228' }}>
+                        <th className="px-3 py-2.5 text-left font-bold sticky left-0 z-10" style={{ background: '#1e3a14', color: '#a3d982', minWidth: 80 }}>REF</th>
+                        <th className="px-3 py-2.5 text-left font-bold" style={{ color: '#a3d982', minWidth: 220 }}>PRODUCTO</th>
+                        <th className="px-2 py-2.5 text-center font-bold" style={{ color: '#e8d870', minWidth: 100 }}>INV. ACTUAL</th>
+                        <th className="px-2 py-2.5 text-center font-bold" style={{ color: '#7acc50', minWidth: 120 }}>DESP. SEM. ACTUAL</th>
+                        <th className="px-2 py-2.5 text-center font-bold" style={{ color: '#a3d982', minWidth: 60 }}></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {inventario.map((p, pi) => {
+                        const rowBg = pi % 2 === 0 ? '#ffffff' : '#f0f7e4'
+                        const despTotal = despPorRef[p.referencia] ?? 0
+                        const invActual = p.existencia ?? 0
+                        return (
+                          <tr key={p.referencia} style={{ background: rowBg, borderBottom: '1px solid #d0e8b0' }}>
+                            <td className="px-3 py-2 font-mono font-bold sticky left-0 z-10" style={{ background: rowBg, color: '#1e5a3a' }}>{p.referencia}</td>
+                            <td className="px-3 py-2" style={{ color: '#2a4a1a' }}>{p.descripcion ?? '—'}</td>
+                            <td className="px-2 py-2 text-center font-mono font-bold" style={{ color: invActual > 0 ? '#2a6a1e' : '#8a9a80' }}>
+                              {invActual > 0 ? invActual.toLocaleString('es-CO') : '—'}
+                            </td>
+                            <td className="px-2 py-2 text-center font-mono font-bold" style={{ color: despTotal > 0 ? '#3a5a20' : '#b0c0a0' }}>
+                              {despTotal > 0 ? despTotal.toLocaleString('es-CO') : '—'}
+                            </td>
+                            <td className="px-2 py-2 text-center">
+                              <button
+                                onClick={() => { setDespRef(p.referencia); setDespCantidad(''); setDespFecha(hoy); setModalDesp({ ref: p.referencia, desc: p.descripcion ?? '' }) }}
+                                className="px-2 py-0.5 rounded text-xs font-bold transition-all hover:brightness-110"
+                                style={{ background: '#c8e0a8', border: '1px solid #8ab87a', color: '#1e3a14' }}>
+                                + Entregar
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Historial de despachos de la semana */}
+              {despachos.length > 0 && (
+                <div>
+                  <h3 className="text-xs font-bold mb-2" style={{ color: '#3a6228' }}>
+                    Historial de entregas · Sem {getISOWeek(isoToDate(despSemana))}
+                  </h3>
+                  {loadingDespachos ? (
+                    <div className="flex items-center justify-center py-8"><Loader2 size={20} className="animate-spin" style={{ color: '#3a7228' }} /></div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-xl shadow-sm" style={{ border: '1px solid #a0c878' }}>
+                      <table className="text-xs w-full">
+                        <thead>
+                          <tr style={{ background: '#2a4a1a', borderBottom: '1px solid #3a6228' }}>
+                            <th className="px-3 py-2 text-left font-bold" style={{ color: '#a3d982' }}>FECHA</th>
+                            <th className="px-3 py-2 text-left font-bold" style={{ color: '#a3d982' }}>REF</th>
+                            <th className="px-3 py-2 text-left font-bold" style={{ color: '#a3d982' }}>PRODUCTO</th>
+                            <th className="px-2 py-2 text-center font-bold" style={{ color: '#7acc50' }}>CANTIDAD</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {despachos.map((d, di) => (
+                            <tr key={d.id} style={{ background: di % 2 === 0 ? '#ffffff' : '#f0f7e4', borderBottom: '1px solid #d0e8b0' }}>
+                              <td className="px-3 py-1.5 font-mono" style={{ color: '#4a6a30' }}>{d.fecha}</td>
+                              <td className="px-3 py-1.5 font-mono font-bold" style={{ color: '#1e5a3a' }}>{d.referencia}</td>
+                              <td className="px-3 py-1.5" style={{ color: '#2a4a1a' }}>{d.descripcion ?? '—'}</td>
+                              <td className="px-2 py-1.5 text-center font-mono font-bold" style={{ color: '#2a6a1e' }}>{d.cantidad.toLocaleString('es-CO')}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
+            </div>
+          )
+        })()}
+
+        {/* ══════════════════════════════════════════════════
+            TAB 5 — INVENTARIO (header)
+        ══════════════════════════════════════════════════ */}
+        {tab === 5 && (
           <div>
             <div className="flex items-center gap-3 mb-4 flex-wrap">
               <h2 className="font-bold text-sm" style={{ color: '#1e3a14' }}>Inventario Producto Terminado y BLK</h2>
@@ -1949,9 +2149,9 @@ export default function PlaneacionPage() {
         })()}
 
         {/* ══════════════════════════════════════════════════
-            TAB 5 — ACTIVIDADES (header)
+            TAB 6 — ACTIVIDADES (header)
         ══════════════════════════════════════════════════ */}
-        {tab === 5 && (
+        {tab === 6 && (
           <div className="rounded-2xl p-4" style={{ background: '#edf7ed', border: '1px solid #b7ddb7' }}>
 
             {/* Toolbar */}
@@ -2049,7 +2249,9 @@ export default function PlaneacionPage() {
                 return false
             }
             if (diaFiltro) {
-              return (planDiario[`${r}||${diaFiltro}`] ?? 0) > 0
+              const hasParent = (planDiario[`${r}||${diaFiltro}`] ?? 0) > 0
+              const hasActivity = (actPorRef[r] ?? []).some(a => (planDiario[`${r}|${a.actividad}|${diaFiltro}`] ?? 0) > 0)
+              return hasParent || hasActivity
             }
             return true
           })
@@ -2494,6 +2696,92 @@ export default function PlaneacionPage() {
           initialDesc={modalAddAct.desc}
           initialActs={modalAddAct.acts}
         />
+      )}
+
+      {/* ── Modal Nueva Entrega al Almacén ──────────────────────────────── */}
+      {modalDesp !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={e => { if (e.target === e.currentTarget) setModalDesp(null) }}>
+          <div className="rounded-2xl shadow-2xl w-full max-w-sm mx-4" style={{ background: '#f0faf0', border: '1px solid #8ab87a' }}>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-3 rounded-t-2xl" style={{ background: '#1e3a14', borderBottom: '1px solid #3a6228' }}>
+              <div className="font-bold text-sm flex items-center gap-2" style={{ color: '#a3d982' }}>
+                <Truck size={14} /> Nueva Entrega al Almacén
+              </div>
+              <button onClick={() => setModalDesp(null)} style={{ color: '#6a9a50' }}><X size={16} /></button>
+            </div>
+            {/* Body */}
+            <div className="px-5 py-4 flex flex-col gap-3">
+              {/* Referencia */}
+              <div>
+                <label className="block text-xs font-semibold mb-1" style={{ color: '#2a5a1e' }}>Referencia</label>
+                <input
+                  list="desp-refs-list"
+                  value={despRef}
+                  onChange={e => setDespRef(e.target.value.toUpperCase())}
+                  placeholder="Ej: 10007"
+                  className="w-full px-3 py-2 rounded-lg text-sm font-mono font-bold focus:outline-none"
+                  style={{ border: '1px solid #8ab87a', background: '#ffffff', color: '#1a3010' }}
+                  autoFocus
+                />
+                <datalist id="desp-refs-list">
+                  {inventario.map(p => <option key={p.referencia} value={p.referencia}>{p.descripcion}</option>)}
+                </datalist>
+              </div>
+              {/* Nombre auto */}
+              {inventario.find(p => p.referencia === despRef)?.descripcion && (
+                <div className="px-3 py-2 rounded-lg text-xs font-semibold" style={{ background: '#e0f0d0', border: '1px solid #a0c878', color: '#2a5a1e' }}>
+                  {inventario.find(p => p.referencia === despRef)?.descripcion}
+                </div>
+              )}
+              {/* Cantidad */}
+              <div>
+                <label className="block text-xs font-semibold mb-1" style={{ color: '#2a5a1e' }}>Cantidad entregada</label>
+                <input
+                  type="number" min={1}
+                  value={despCantidad}
+                  onChange={e => setDespCantidad(e.target.value)}
+                  placeholder="0"
+                  className="w-full px-3 py-2 rounded-lg text-sm font-mono font-bold text-center focus:outline-none"
+                  style={{ border: '1px solid #8ab87a', background: '#ffffff', color: '#1a3010' }}
+                />
+              </div>
+              {/* Fecha */}
+              <div>
+                <label className="block text-xs font-semibold mb-1" style={{ color: '#2a5a1e' }}>Fecha de entrega</label>
+                <input
+                  type="date"
+                  value={despFecha}
+                  onChange={e => setDespFecha(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg text-sm font-mono focus:outline-none"
+                  style={{ border: '1px solid #8ab87a', background: '#ffffff', color: '#1a3010' }}
+                />
+              </div>
+              {/* Semana calculada */}
+              <div className="flex items-center justify-between px-3 py-2 rounded-lg text-xs" style={{ background: '#e0f0d0', border: '1px solid #a0c878' }}>
+                <span style={{ color: '#4a7a30' }}>Semana calculada</span>
+                <span className="font-mono font-bold" style={{ color: '#1e5a1e' }}>{despSemLabel}</span>
+              </div>
+            </div>
+            {/* Footer */}
+            <div className="flex gap-2 px-5 pb-5">
+              <button onClick={() => setModalDesp(null)}
+                className="flex-1 px-3 py-2 rounded-lg text-xs font-semibold"
+                style={{ background: '#e0ead8', border: '1px solid #a0c080', color: '#4a6a30' }}>
+                Cancelar
+              </button>
+              <button
+                onClick={guardarDespacho}
+                disabled={!despRef || !despCantidad || savingDespacho}
+                className="flex-1 px-3 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 disabled:opacity-40"
+                style={{ background: '#1e3a14', color: '#a3d982', border: '1px solid #3a6228' }}>
+                {savingDespacho ? <Loader2 size={12} className="animate-spin" /> : <Truck size={12} />}
+                Registrar Entrega
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Modal comentario ─────────────────────────────────────────────── */}
