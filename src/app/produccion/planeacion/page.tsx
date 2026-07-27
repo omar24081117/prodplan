@@ -2276,15 +2276,18 @@ export default function PlaneacionPage() {
                 onMouseLeave={dmMouseLeave}
                 className="overflow-x-auto rounded-xl select-none shadow-sm"
                 style={{ border:'1px solid #a0c878', cursor:'grab', scrollbarWidth:'thin', scrollbarColor:'#8ab87a #d4e8b8' }}>
-                <table className="text-xs" style={{ minWidth: `${312 + semanasVisDm.length * 336}px`, borderCollapse: 'separate', borderSpacing: 0 }}>
+                <table className="text-xs" style={{ minWidth: `${424 + semanasVisDm.length * 336}px`, borderCollapse: 'separate', borderSpacing: 0 }}>
                   <thead>
                     {/* Row 1: semanas */}
                     <tr style={{ background: '#1e3a14', borderBottom: '1px solid #2e5a20' }}>
                       <th className="px-3 py-2 text-left sticky left-0 z-20" style={{ background: '#1e3a14', minWidth: 240 }}>
                         <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#a3d982' }}>PRODUCTO</span>
                       </th>
-                      <th className="px-2 py-2 text-center sticky z-20" style={{ background: '#1e3a14', minWidth: 72, left: 240, borderRight: '2px solid #4a8a30', boxShadow: '3px 0 6px rgba(0,0,0,0.15)' }}>
+                      <th className="px-2 py-2 text-center sticky z-20" style={{ background: '#1e3a14', minWidth: 72, left: 240 }}>
                         <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#e8b870' }}>INV.</span>
+                      </th>
+                      <th className="px-2 py-2 text-center sticky z-20" style={{ background: '#1e3a14', minWidth: 112, left: 312, borderRight: '2px solid #4a8a30', boxShadow: '3px 0 6px rgba(0,0,0,0.15)' }}>
+                        <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#7ab5e8' }}>TOTAL PROYECTADO</span>
                       </th>
                       {semanasVisDm.map(s => {
                         const d = isoToDate(s)
@@ -2299,7 +2302,8 @@ export default function PlaneacionPage() {
                     {/* Row 2: sub-headers */}
                     <tr style={{ background: '#264a18', borderBottom: '2px solid #3a6228' }}>
                       <th className="sticky left-0 z-20" style={{ background: '#264a18' }} />
-                      <th className="sticky z-20" style={{ background: '#264a18', left: 240, borderRight: '2px solid #4a8a30', boxShadow: '3px 0 6px rgba(0,0,0,0.15)', minWidth: 72 }} />
+                      <th className="sticky z-20" style={{ background: '#264a18', left: 240, minWidth: 72 }} />
+                      <th className="px-2 py-1.5 text-center sticky z-20 font-bold uppercase" style={{ background: '#264a18', left: 312, minWidth: 112, borderRight: '2px solid #4a8a30', boxShadow: '3px 0 6px rgba(0,0,0,0.15)', color: '#7ab5e8', fontSize: '0.6rem' }}>FORECAST</th>
                       {semanasVisDm.map(s => (
                         ['PROYECTADO','PEDIDO','PROD','SALDO'].map(h => (
                           <th key={`${s}_${h}`} className="px-2 py-1.5 text-center font-bold uppercase"
@@ -2335,10 +2339,18 @@ export default function PlaneacionPage() {
                           {/* Inventario actual */}
                           <td className="px-2 py-1.5 text-center font-mono font-bold text-xs sticky z-10"
                             style={{ background: rowBg, left: 240, minWidth: 72,
-                              color: (prod.existencia ?? 0) > 0 ? '#2a6a1e' : '#c04030',
-                              borderRight: '2px solid #8ab87a', boxShadow: '3px 0 6px rgba(0,0,0,0.08)' }}>
+                              color: (prod.existencia ?? 0) > 0 ? '#2a6a1e' : '#c04030' }}>
                             {(prod.existencia ?? 0) > 0 ? (prod.existencia).toLocaleString('es-CO') : '—'}
                           </td>
+                          {/* Total Proyectado */}
+                          {((total) => (
+                            <td className="px-2 py-1.5 text-center font-mono font-bold text-xs sticky z-10"
+                              style={{ background: rowBg, left: 312, minWidth: 112,
+                                color: total > 0 ? '#2a5a8a' : '#c0ceb0',
+                                borderRight: '2px solid #8ab87a', boxShadow: '3px 0 6px rgba(0,0,0,0.08)' }}>
+                              {total > 0 ? total.toLocaleString('es-CO') : '—'}
+                            </td>
+                          ))(semanas.filter(s => s > hoyLunes).reduce((acc, s) => acc + (planData[`${ref}_${s}`]?.pedido ?? 0), 0))}
                           {semanasVisDm.map((s, vi) => {
                             const planKey = `${ref}_${s}`
                             const demKey      = `${ref}|${s}`

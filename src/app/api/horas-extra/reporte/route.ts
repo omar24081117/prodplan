@@ -54,15 +54,16 @@ function calcular(
   const inMins = toMins(horaIngreso ?? '')
 
   // Día libre (lunes): todas las horas trabajadas son extras
-  if (diaLibre && horaSalida && inMins >= 0) {
-    const outMins = toMins(horaSalida)
+  if (diaLibre && (horaEfectiva || horaSalida) && inMins >= 0) {
+    const salidaReal = horaEfectiva ?? horaSalida ?? ''
+    const outMins = toMins(salidaReal)
     const minutosExtra = Math.max(0, outMins - inMins)
     const horasExtra = Math.round((minutosExtra / 60) * 100) / 100
     let horasRecargo = 0
     if (outMins >= 22 * 60 + 30) {
       horasRecargo = Math.round((Math.max(0, outMins - 19 * 60) / 60) * 100) / 100
     }
-    return { entradaNorm: '—', salidaNorm: '—', salidaEfectiva: horaSalida, minutosExtra, horasExtra, horasRecargo }
+    return { entradaNorm: '—', salidaNorm: '—', salidaEfectiva: salidaReal, minutosExtra, horasExtra, horasRecargo }
   }
 
   let entradaNorm = '—', salidaNorm = '—', salidaNormMins = -1

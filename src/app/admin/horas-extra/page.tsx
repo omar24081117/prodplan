@@ -70,6 +70,20 @@ function calcConOverride(r: Registro, ov: Override) {
     }
   }
 
+  // ── Día libre (lunes): todo el tiempo trabajado es extra ──
+  if (r.dia_libre) {
+    const inMins  = toMins(ov.hora_ingreso || r.hora_ingreso || '')
+    const outMins = toMins(ov.salida_efectiva)
+    if (inMins < 0 || outMins < 0) return { minutos_extra: 0, horas_extra: 0, horas_recargo: 0 }
+    const minExtra = Math.max(0, outMins - inMins)
+    const hExtra   = Math.round((minExtra / 60) * 100) / 100
+    let hRecargo = 0
+    if (outMins >= 22 * 60 + 30) {
+      hRecargo = Math.round((Math.max(0, outMins - 19 * 60) / 60) * 100) / 100
+    }
+    return { minutos_extra: minExtra, horas_extra: hExtra, horas_recargo: hRecargo }
+  }
+
   // ── Modo normal: calcular desde salida efectiva vs salida norm ──
   const normTime = r.salida_norm
   if (!normTime) return { minutos_extra: 0, horas_extra: 0, horas_recargo: 0 }
@@ -113,7 +127,7 @@ function TurnoManualModal({
   const [hsNocManual,     setHsNocManual]     = useState(overrideActual?.horas_nocturnas_manual?.toString() ?? '')
   const [hsRecNocManual,  setHsRecNocManual]  = useState(overrideActual?.recargo_nocturno_manual?.toString() ?? '')
 
-  const previewHorario = modo === 'horario' && salidaEfec && registro.salida_norm
+  const previewHorario = modo === 'horario' && salidaEfec && (registro.salida_norm || registro.dia_libre)
     ? calcConOverride(registro, { hora_ingreso: horaIngreso, salida_efectiva: salidaEfec })
     : null
   const previewManual = modo === 'adicional' && (hsExtManual || hsNocManual)
