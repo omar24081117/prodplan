@@ -176,10 +176,12 @@ const ActividadesTabla = React.memo(function ActividadesTabla({
   refsAct,
   actPorRef,
   filtroAct,
+  onEditRef,
 }: {
   refsAct: string[]
   actPorRef: Record<string, Actividad[]>
   filtroAct: string
+  onEditRef?: (ref: string) => void
 }) {
   if (refsAct.length === 0) return null
   return (
@@ -187,7 +189,7 @@ const ActividadesTabla = React.memo(function ActividadesTabla({
       <table className="w-full text-xs">
         <thead>
           <tr style={{ background: '#c8e6c9', borderBottom: '2px solid #a3c9a3' }}>
-            {['REF','PRODUCTO','ACTIVIDAD','REF INSUMO'].map(h => (
+            {['REF','PRODUCTO','ACTIVIDAD','REF INSUMO',''].map(h => (
               <th key={h} className="px-4 py-3 text-left font-bold uppercase tracking-wider"
                 style={{ color: '#1a4a1a', fontSize: '0.65rem' }}>{h}</th>
             ))}
@@ -228,6 +230,17 @@ const ActividadesTabla = React.memo(function ActividadesTabla({
                 <td className="px-4 py-2.5 font-mono" style={{ color: '#4b6a4b' }}>
                   {a.sub_referencia ?? <span style={{ color: '#c0c0c0' }}>—</span>}
                 </td>
+                <td className="px-2 py-2.5 text-right" style={{ minWidth: 40 }}>
+                  {ai === 0 && onEditRef && (
+                    <button
+                      onClick={() => onEditRef(ref)}
+                      title="Editar / agregar actividades"
+                      className="px-2 py-0.5 rounded text-xs font-bold hover:brightness-95 transition-all"
+                      style={{ background: '#d4edda', border: '1px solid #a3c9a3', color: '#166534' }}>
+                      + act.
+                    </button>
+                  )}
+                </td>
               </tr>
             ))
           })}
@@ -243,14 +256,22 @@ const ActividadesTabla = React.memo(function ActividadesTabla({
 function ModalAgregarProducto({
   onClose,
   onSave,
+  initialRef = '',
+  initialDesc = '',
+  initialActs = [{ actividad: '', subRef: '' }],
 }: {
   onClose: () => void
   onSave: (ref: string, desc: string, acts: { actividad: string; subRef: string }[]) => Promise<void>
+  initialRef?: string
+  initialDesc?: string
+  initialActs?: { actividad: string; subRef: string }[]
 }) {
-  const [formRef,      setFormRef]      = useState('')
-  const [formProducto, setFormProducto] = useState('')
-  const [formActivs,   setFormActivs]   = useState<{ actividad: string; subRef: string }[]>([{ actividad: '', subRef: '' }])
+  const [formRef,      setFormRef]      = useState(initialRef)
+  const [formProducto, setFormProducto] = useState(initialDesc)
+  const [formActivs,   setFormActivs]   = useState<{ actividad: string; subRef: string }[]>(initialActs)
   const [saving,       setSaving]       = useState(false)
+
+  const isExisting = initialRef !== ''
 
   async function handleSave() {
     const ref  = formRef.trim()
@@ -268,7 +289,9 @@ function ModalAgregarProducto({
       <div className="rounded-2xl p-6 w-full max-w-lg shadow-2xl overflow-y-auto"
         style={{ background: '#f0faf0', border: '1px solid #b7ddb7', maxHeight: '90vh', zIndex: 10000, position: 'relative' }}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-base" style={{ color: '#1a4a1a' }}>Agregar Producto y Actividades</h3>
+          <h3 className="font-bold text-base" style={{ color: '#1a4a1a' }}>
+            {isExisting ? `Actividades · ${initialRef}` : 'Agregar Producto y Actividades'}
+          </h3>
           <button onClick={onClose} style={{ color: '#6b9c6b' }}><X size={18} /></button>
         </div>
         <div className="flex flex-col gap-3">
@@ -276,8 +299,9 @@ function ModalAgregarProducto({
             <div className="flex flex-col gap-1 flex-1">
               <label className="text-xs font-semibold" style={{ color: '#1a4a1a' }}>REF Producto</label>
               <input value={formRef} onChange={e => setFormRef(e.target.value)} placeholder="Ej: 10000"
+                readOnly={isExisting}
                 className="rounded-lg px-3 py-2 text-sm focus:outline-none"
-                style={{ background: '#fff', border: '1px solid #a3c9a3', color: '#1a4a1a' }} />
+                style={{ background: isExisting ? '#e8f5e8' : '#fff', border: '1px solid #a3c9a3', color: '#1a4a1a' }} />
             </div>
             <div className="flex flex-col gap-1 flex-[2]">
               <label className="text-xs font-semibold" style={{ color: '#1a4a1a' }}>Nombre del Producto</label>
@@ -395,7 +419,7 @@ export default function PlaneacionPage() {
   const [filtroAct, setFiltroAct]         = useState('')
   const fileActRef = useRef<HTMLInputElement>(null)
   // Modal agregar producto manual
-  const [modalAddAct, setModalAddAct]     = useState(false)
+  const [modalAddAct, setModalAddAct]     = useState<{ ref: string; desc: string; acts: { actividad: string; subRef: string }[] } | null>(null)
 
   // ── Plan Diario (tab 4) ─────────────────────────────────────────────────
   const hoyLunes = toISO(getMonday(new Date()))
@@ -484,7 +508,7 @@ export default function PlaneacionPage() {
       body: JSON.stringify(payload),
     })
     if (res.ok) {
-      setModalAddAct(false)
+      setModalAddAct(null)
       await cargarActividades()
     } else {
       const e = await res.json().catch(() => ({}))
@@ -1943,7 +1967,7 @@ export default function PlaneacionPage() {
                   <RefreshCw size={13} />
                 </button>
                 {/* Agregar manual */}
-                <button onClick={() => setModalAddAct(true)}
+                <button onClick={() => setModalAddAct({ ref: '', desc: '', acts: [{ actividad: '', subRef: '' }] })}
                   className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg font-semibold transition-all hover:brightness-95"
                   style={{ background: '#fff', border: '1px solid #4ade80', color: '#166534' }}>
                   <Package size={12} /> Agregar Producto
@@ -1993,6 +2017,18 @@ export default function PlaneacionPage() {
                 refsAct={refsAct}
                 actPorRef={actPorRef}
                 filtroAct={filtroAct}
+                onEditRef={ref => {
+                  const acts = actPorRef[ref] ?? []
+                  const desc = acts[0]?.descripcion_producto ?? ''
+                  setModalAddAct({
+                    ref,
+                    desc,
+                    acts: [
+                      ...acts.map(a => ({ actividad: a.actividad, subRef: a.sub_referencia ?? '' })),
+                      { actividad: '', subRef: '' },
+                    ],
+                  })
+                }}
               />
             )}
 
@@ -2450,10 +2486,13 @@ export default function PlaneacionPage() {
       </div>
 
       {/* ── Modal agregar producto ───────────────────────────────────────── */}
-      {modalAddAct && (
+      {modalAddAct !== null && (
         <ModalAgregarProducto
-          onClose={() => setModalAddAct(false)}
+          onClose={() => setModalAddAct(null)}
           onSave={guardarProductoManual}
+          initialRef={modalAddAct.ref}
+          initialDesc={modalAddAct.desc}
+          initialActs={modalAddAct.acts}
         />
       )}
 

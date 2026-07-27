@@ -73,7 +73,7 @@ function calcConOverride(r: Registro, ov: Override) {
   // ── Día libre (lunes): todo el tiempo trabajado es extra ──
   if (r.dia_libre) {
     const inMins  = toMins(ov.hora_ingreso || r.hora_ingreso || '')
-    const outMins = toMins(ov.salida_efectiva)
+    const outMins = toMins(ov.salida_efectiva || r.salida_efectiva || '')
     if (inMins < 0 || outMins < 0) return { minutos_extra: 0, horas_extra: 0, horas_recargo: 0 }
     const minExtra = Math.max(0, outMins - inMins)
     const hExtra   = Math.round((minExtra / 60) * 100) / 100
