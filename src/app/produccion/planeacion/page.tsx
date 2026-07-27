@@ -461,7 +461,6 @@ export default function PlaneacionPage() {
   // ── Despachos (Entregas al Almacén) ────────────────────────────────────
   type Despacho = { id: string; referencia: string; descripcion: string | null; cantidad: number; fecha: string; semana_inicio: string; creado_en: string }
   const [despachos, setDespachos]           = useState<Despacho[]>([])
-  const [despMap, setDespMap]               = useState<Record<string, number>>({})  // ${ref}_${semana} → total
   const [loadingDespachos, setLoadingDesp]  = useState(false)
   const [savingDespacho, setSavingDesp]     = useState(false)
   const [modalDesp, setModalDesp]           = useState<{ ref: string; desc: string } | null>(null)
@@ -546,30 +545,17 @@ export default function PlaneacionPage() {
     setLoadingAct(false)
   }, [])
 
-  const cargarDespachos = useCallback(async (semana: string) => {
+  const cargarDespachos = useCallback(async () => {
     setLoadingDesp(true)
-    const res = await fetch(`/api/planeacion/despachos?semana=${semana}`)
+    const res = await fetch('/api/planeacion/despachos')
     if (res.ok) setDespachos(await res.json())
     setLoadingDesp(false)
-  }, [])
-
-  const cargarDespMap = useCallback(async () => {
-    const res = await fetch('/api/planeacion/despachos')
-    if (!res.ok) return
-    const rows: Despacho[] = await res.json()
-    const map: Record<string, number> = {}
-    for (const d of rows) {
-      const key = `${d.referencia}_${d.semana_inicio}`
-      map[key] = (map[key] ?? 0) + d.cantidad
-    }
-    setDespMap(map)
   }, [])
 
   useEffect(() => { cargarInventario() }, [cargarInventario])
   useEffect(() => { if (tab === 0 || tab === 1 || tab === 2 || tab === 3) cargarPlan() }, [tab, cargarPlan])
   useEffect(() => { if (tab === 2 || tab === 6) cargarActividades() }, [tab, cargarActividades])
-  useEffect(() => { if (tab === 4) cargarDespachos(hoyLunes) }, [tab, hoyLunes, cargarDespachos])
-  useEffect(() => { if (tab === 1) cargarDespMap() }, [tab, cargarDespMap])
+  useEffect(() => { if (tab === 1 || tab === 4) cargarDespachos() }, [tab, cargarDespachos])
   useEffect(() => { if (tab === 0 || tab === 1 || tab === 3) cargarDemanda() }, [tab])
   // Scroll to current week once data finishes loading (avoids scroll reset on re-render)
   useEffect(() => {
@@ -1233,6 +1219,16 @@ export default function PlaneacionPage() {
     return map
   }, [actividades])
 
+  // despMap: total despachado por ref+semana — usado en SALDO Demanda
+  const despMap = useMemo(() => {
+    const map: Record<string, number> = {}
+    for (const d of despachos) {
+      const key = `${d.referencia}_${d.semana_inicio}`
+      map[key] = (map[key] ?? 0) + d.cantidad
+    }
+    return map
+  }, [despachos])
+
   const refsAct = useMemo(() =>
     Object.keys(actPorRef).filter(r =>
       !filtroAct || r.includes(filtroAct) ||
@@ -1264,7 +1260,7 @@ export default function PlaneacionPage() {
       setModalDesp(null)
       setDespRef('')
       setDespCantidad('')
-      await Promise.all([cargarDespachos(hoyLunes), cargarInventario()])
+      await Promise.all([cargarDespachos(), cargarInventario()])
     } else {
       const e = await res.json().catch(() => ({}))
       setErrorMsg(e.error || 'Error al guardar')
@@ -1467,9 +1463,11 @@ export default function PlaneacionPage() {
         ══════════════════════════════════════════════════ */}
         {tab === 4 && (() => {
           const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
-          const despSemana = toISO(getMonday(new Date()))
+          const despSemana = hoyLunes
+          const despSemana_ = despSemana  // alias para usar en filtros
+          const despSemanales = despachos.filter(d => d.semana_inicio === despSemana)
           const despPorRef: Record<string, number> = {}
-          for (const d of despachos) {
+          for (const d of despSemanales) {
             despPorRef[d.referencia] = (despPorRef[d.referencia] ?? 0) + d.cantidad
           }
           return (
@@ -1488,7 +1486,7 @@ export default function PlaneacionPage() {
                     style={{ background: '#1e3a14', color: '#a3d982', border: '1px solid #3a6228' }}>
                     <Plus size={13} /> Nueva Entrega
                   </button>
-                  <button onClick={() => cargarDespachos(despSemana)}
+                  <button onClick={() => cargarDespachos()}
                     className="p-1.5 rounded-lg"
                     style={{ background: '#c8e0a8', border: '1px solid #8ab87a', color: '#1e3a14' }}>
                     <RefreshCw size={13} />
@@ -1543,7 +1541,7 @@ export default function PlaneacionPage() {
               )}
 
               {/* Historial de despachos de la semana */}
-              {despachos.length > 0 && (
+              {despSemanales.length > 0 && (
                 <div>
                   <h3 className="text-xs font-bold mb-2" style={{ color: '#3a6228' }}>
                     Historial de entregas · Sem {getISOWeek(isoToDate(despSemana))}
@@ -1562,7 +1560,7 @@ export default function PlaneacionPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {despachos.map((d, di) => (
+                          {despSemanales.map((d, di) => (
                             <tr key={d.id} style={{ background: di % 2 === 0 ? '#ffffff' : '#f0f7e4', borderBottom: '1px solid #d0e8b0' }}>
                               <td className="px-3 py-1.5 font-mono" style={{ color: '#4a6a30' }}>{d.fecha}</td>
                               <td className="px-3 py-1.5 font-mono font-bold" style={{ color: '#1e5a3a' }}>{d.referencia}</td>
