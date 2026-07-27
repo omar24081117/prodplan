@@ -49,6 +49,7 @@ type Override = {
   horas_extra_manual?: number      // Horas extra diurnas manuales
   horas_nocturnas_manual?: number  // Horas extra nocturnas manuales
   recargo_nocturno_manual?: number // Recargo nocturno manual adicional
+  minutos_alimentacion?: number    // Minutos de pausa alimentación a descontar
 }
 
 const toMins = (t: string) => {
@@ -70,12 +71,14 @@ function calcConOverride(r: Registro, ov: Override) {
     }
   }
 
+  const alimentacion = Math.max(0, ov.minutos_alimentacion ?? 0)
+
   // ── Día libre (lunes): todo el tiempo trabajado es extra ──
   if (r.dia_libre) {
     const inMins  = toMins(ov.hora_ingreso || r.hora_ingreso || '')
     const outMins = toMins(ov.salida_efectiva || r.salida_efectiva || '')
     if (inMins < 0 || outMins < 0) return { minutos_extra: 0, horas_extra: 0, horas_recargo: 0 }
-    const minExtra = Math.max(0, outMins - inMins)
+    const minExtra = Math.max(0, outMins - inMins - alimentacion)
     const hExtra   = Math.round((minExtra / 60) * 100) / 100
     let hRecargo = 0
     if (outMins >= 22 * 60 + 30) {
@@ -91,7 +94,7 @@ function calcConOverride(r: Registro, ov: Override) {
   const salidaEfMins   = toMins(ov.salida_efectiva)
   if (salidaEfMins < 0) return { minutos_extra: 0, horas_extra: 0, horas_recargo: 0 }
 
-  const minExtra = Math.max(0, salidaEfMins - salidaNormMins)
+  const minExtra = Math.max(0, salidaEfMins - salidaNormMins - alimentacion)
   const hExtra   = Math.round((minExtra / 60) * 100) / 100
 
   let hRecargo = 0
@@ -126,9 +129,10 @@ function TurnoManualModal({
   const [hsExtManual,     setHsExtManual]     = useState(overrideActual?.horas_extra_manual?.toString()     ?? '')
   const [hsNocManual,     setHsNocManual]     = useState(overrideActual?.horas_nocturnas_manual?.toString() ?? '')
   const [hsRecNocManual,  setHsRecNocManual]  = useState(overrideActual?.recargo_nocturno_manual?.toString() ?? '')
+  const [minAlim,         setMinAlim]         = useState(overrideActual?.minutos_alimentacion?.toString() ?? '')
 
   const previewHorario = modo === 'horario' && salidaEfec && (registro.salida_norm || registro.dia_libre)
-    ? calcConOverride(registro, { hora_ingreso: horaIngreso, salida_efectiva: salidaEfec })
+    ? calcConOverride(registro, { hora_ingreso: horaIngreso, salida_efectiva: salidaEfec, minutos_alimentacion: parseInt(minAlim) || 0 })
     : null
   const previewManual = modo === 'adicional' && (hsExtManual || hsNocManual)
     ? {
@@ -142,6 +146,7 @@ function TurnoManualModal({
 
   function guardar(e: React.FormEvent) {
     e.preventDefault()
+    const alim = parseInt(minAlim) || undefined
     if (modo === 'adicional') {
       onGuardar(registro.cedula, {
         hora_ingreso: horaIngreso || registro.hora_ingreso || '',
@@ -149,9 +154,10 @@ function TurnoManualModal({
         horas_extra_manual:      parseFloat(hsExtManual)    || 0,
         horas_nocturnas_manual:  parseFloat(hsNocManual)    || undefined,
         recargo_nocturno_manual: parseFloat(hsRecNocManual) || undefined,
+        minutos_alimentacion:    alim,
       })
     } else {
-      onGuardar(registro.cedula, { hora_ingreso: horaIngreso, salida_efectiva: salidaEfec })
+      onGuardar(registro.cedula, { hora_ingreso: horaIngreso, salida_efectiva: salidaEfec, minutos_alimentacion: alim })
     }
     onClose()
   }
@@ -259,6 +265,23 @@ function TurnoManualModal({
               </div>
             </div>
           )}
+
+          {/* Alimentación (opcional, aplica en ambos modos) */}
+          <div>
+            <label className="text-xs text-gray-400 block mb-1">
+              Alimentación <span className="text-emerald-400">(min a descontar)</span>
+              <span className="text-gray-600 ml-1">— opcional</span>
+            </label>
+            <div className="flex items-center gap-2">
+              <input type="number" min="0" max="120" step="5"
+                placeholder="0"
+                value={minAlim}
+                onChange={e => setMinAlim(e.target.value)}
+                className="w-24 bg-gray-800 border border-emerald-800 text-white rounded-lg px-3 py-2 text-sm font-mono font-bold focus:outline-none focus:border-emerald-400 text-center"
+              />
+              <span className="text-gray-400 text-sm">min</span>
+            </div>
+          </div>
 
           {/* Vista previa */}
           {preview && (
@@ -552,13 +575,14 @@ export default function HorasExtraPage() {
     // Overrides guardados
     const ovMap: Record<string, Override> = {}
     for (const ov of dataOv) {
-      if (ov.hora_ingreso || ov.salida_efectiva || ov.horas_extra_manual || ov.horas_nocturnas_manual) {
+      if (ov.hora_ingreso || ov.salida_efectiva || ov.horas_extra_manual || ov.horas_nocturnas_manual || ov.minutos_alimentacion) {
         ovMap[ov.cedula] = {
           hora_ingreso:            ov.hora_ingreso            ?? '',
           salida_efectiva:         ov.salida_efectiva         ?? '',
           horas_extra_manual:      ov.horas_extra_manual      ?? undefined,
           horas_nocturnas_manual:  ov.horas_nocturnas_manual  ?? undefined,
           recargo_nocturno_manual: ov.recargo_nocturno_manual ?? undefined,
+          minutos_alimentacion:    ov.minutos_alimentacion    ?? undefined,
         }
       }
     }
@@ -1041,6 +1065,7 @@ export default function HorasExtraPage() {
                 horas_extra_manual:      ov.horas_extra_manual      ?? null,
                 horas_nocturnas_manual:  ov.horas_nocturnas_manual  ?? null,
                 recargo_nocturno_manual: ov.recargo_nocturno_manual ?? null,
+                minutos_alimentacion:    ov.minutos_alimentacion    ?? null,
               }),
             })
           }}
