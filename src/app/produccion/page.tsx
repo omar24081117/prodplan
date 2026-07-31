@@ -171,8 +171,8 @@ export default function ProduccionPage() {
         </form>
       </div>
 
-      {/* Card Mis Horas Extra — temporalmente deshabilitado */}
-      {false && (
+      {/* Card Mis Horas Extra */}
+      {(
         <div className="relative z-10 w-full max-w-sm rounded-2xl p-5 cursor-pointer hover:brightness-110 transition-all"
           style={{ background: '#1e3a14', border: '1px solid #3a6228', boxShadow: '0 8px 32px rgba(20,60,10,0.35)' }}
           onClick={() => router.push('/produccion/mis-horas')}>
