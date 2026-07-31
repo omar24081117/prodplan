@@ -1249,9 +1249,9 @@ export default function HorasExtraPage() {
                 : r
               ))
             }
-            // 3. Actualizar override en estado local
-            setOverrides(prev => ({ ...prev, [cedula]: ov }))
+            // 3. Cerrar modal y recargar datos frescos del servidor
             setModalTurno(null)
+            await cargar(fecha)
           }}
         />
       )}
