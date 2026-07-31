@@ -439,6 +439,10 @@ export default function PlaneacionPage() {
   const [semDiario, setSemDiario]         = useState(hoyLunes)
   const [filtroDiario, setFiltroDiario]   = useState('')
   const [diaFiltro, setDiaFiltro]         = useState<string | null>(null)
+  const [filtrosActDiario, setFiltrosActDiario] = useState<string[]>([])
+  const [buscarAct, setBuscarAct]             = useState('')
+  const [actDropdownOpen, setActDropdownOpen] = useState(false)
+  const actDropdownRef                        = useRef<HTMLDivElement>(null)
   const [planDiario, setPlanDiario]       = useState<Record<string,number>>({})
   const [loadingDiario, setLoadingDiario] = useState(false)
   const saveDiarioTimers                  = useRef<Record<string,ReturnType<typeof setTimeout>>>({})
@@ -552,6 +556,17 @@ export default function PlaneacionPage() {
     setLoadingDesp(false)
   }, [])
 
+  const eliminarDespacho = useCallback(async (id: string, descripcion: string, cantidad: number) => {
+    if (!confirm(`¿Eliminar entrega de ${descripcion} (${cantidad.toLocaleString('es-CO')} uds)?\n\nEsto revertirá el ajuste en inventario si aplica.`)) return
+    const res = await fetch(`/api/planeacion/despachos?id=${id}`, { method: 'DELETE' })
+    if (res.ok) {
+      await Promise.all([cargarDespachos(), cargarInventario()])
+    } else {
+      const e = await res.json().catch(() => ({}))
+      alert('Error al eliminar: ' + (e.error ?? 'desconocido'))
+    }
+  }, [cargarDespachos, cargarInventario])
+
   useEffect(() => { cargarInventario() }, [cargarInventario])
   useEffect(() => { if (tab === 0 || tab === 1 || tab === 2 || tab === 3) cargarPlan() }, [tab, cargarPlan])
   useEffect(() => { if (tab === 2 || tab === 6) cargarActividades() }, [tab, cargarActividades])
@@ -620,7 +635,10 @@ export default function PlaneacionPage() {
     setLoadingDemanda(true)
     const desde = semanas[0]
     const hasta  = semanas[semanas.length - 1]
-    const res = await fetch(`/api/planeacion/demanda-diaria?desde=${desde}&hasta=${hasta}`)
+    const [res, resDesp] = await Promise.all([
+      fetch(`/api/planeacion/demanda-diaria?desde=${desde}&hasta=${hasta}`),
+      fetch('/api/planeacion/despachos'),
+    ])
     if (res.ok) {
       const rows: {referencia:string;fecha:string;pedido:number}[] = await res.json()
       const map: Record<string,number> = {}
@@ -637,6 +655,7 @@ export default function PlaneacionPage() {
       setDemandaOverride(map)
       setDemandaProdOv(prodOv)
     }
+    if (resDesp.ok) setDespachos(await resDesp.json())
     setLoadingDemanda(false)
   }
 
@@ -1223,8 +1242,9 @@ export default function PlaneacionPage() {
   const despMap = useMemo(() => {
     const map: Record<string, number> = {}
     for (const d of despachos) {
-      const key = `${d.referencia}_${d.semana_inicio}`
-      map[key] = (map[key] ?? 0) + d.cantidad
+      // slice(0,10) normaliza cualquier formato de fecha a YYYY-MM-DD
+      const key = `${d.referencia}_${(d.semana_inicio ?? '').slice(0, 10)}`
+      map[key] = (map[key] ?? 0) + Number(d.cantidad)
     }
     return map
   }, [despachos])
@@ -1351,9 +1371,8 @@ export default function PlaneacionPage() {
       return pedidoManual !== undefined ? pedidoManual : proyectado
     }
     const prodDe = (s: string) => {
-      // Entregas al almacén tienen prioridad sobre PROD de planData
-      const despTotal = despMap[`${ref}_${s}`]
-      if (despTotal !== undefined) return despTotal
+      // Si hay entrega para esta semana, ya fue sumada a existencia → no duplicar en PROD
+      if (despMap[`${ref}_${s}`] !== undefined) return 0
       const ovKey = `${ref}|${s}`
       if (ovKey in demandaProdOv) return demandaProdOv[ovKey] ?? 0
       return planData[`${ref}_${s}`]?.produccion ?? 0
@@ -1557,6 +1576,7 @@ export default function PlaneacionPage() {
                             <th className="px-3 py-2 text-left font-bold" style={{ color: '#a3d982' }}>REF</th>
                             <th className="px-3 py-2 text-left font-bold" style={{ color: '#a3d982' }}>PRODUCTO</th>
                             <th className="px-2 py-2 text-center font-bold" style={{ color: '#7acc50' }}>CANTIDAD</th>
+                            <th className="px-2 py-2" style={{ width: 36 }}></th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1566,6 +1586,15 @@ export default function PlaneacionPage() {
                               <td className="px-3 py-1.5 font-mono font-bold" style={{ color: '#1e5a3a' }}>{d.referencia}</td>
                               <td className="px-3 py-1.5" style={{ color: '#2a4a1a' }}>{d.descripcion ?? '—'}</td>
                               <td className="px-2 py-1.5 text-center font-mono font-bold" style={{ color: '#2a6a1e' }}>{d.cantidad.toLocaleString('es-CO')}</td>
+                              <td className="px-2 py-1.5 text-center">
+                                <button
+                                  onClick={() => eliminarDespacho(d.id, d.descripcion ?? d.referencia, d.cantidad)}
+                                  className="p-1 rounded hover:brightness-110 transition-all"
+                                  style={{ background: '#fee2e2', border: '1px solid #fca5a5', color: '#dc2626' }}
+                                  title="Eliminar entrega">
+                                  <Trash2 size={11} />
+                                </button>
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -2240,15 +2269,25 @@ export default function PlaneacionPage() {
           const dias = getDias(semDiario)
           // All refs that have activities, filtered to those in inventario
           const refsConActAll = Object.keys(actPorRef).filter(r => actPorRef[r]?.length > 0)
+          // Actividades únicas para el filtro de actividad
+          const actividadesUnicas = [...new Set(
+            Object.values(actPorRef).flat().map(a => a.actividad)
+          )].sort()
           const refsConAct = refsConActAll.filter(r => {
             if (filtroDiario) {
               const q = filtroDiario.toLowerCase()
               if (!r.toLowerCase().includes(q) && !(actPorRef[r][0]?.descripcion_producto ?? '').toLowerCase().includes(q))
                 return false
             }
+            if (filtrosActDiario.length > 0) {
+              if (!(actPorRef[r] ?? []).some(a => filtrosActDiario.includes(a.actividad))) return false
+            }
             if (diaFiltro) {
-              const hasParent = (planDiario[`${r}||${diaFiltro}`] ?? 0) > 0
-              const hasActivity = (actPorRef[r] ?? []).some(a => (planDiario[`${r}|${a.actividad}|${diaFiltro}`] ?? 0) > 0)
+              const actsVis = filtrosActDiario.length > 0
+                ? (actPorRef[r] ?? []).filter(a => filtrosActDiario.includes(a.actividad))
+                : (actPorRef[r] ?? [])
+              const hasParent = filtrosActDiario.length === 0 && (planDiario[`${r}||${diaFiltro}`] ?? 0) > 0
+              const hasActivity = actsVis.some(a => (planDiario[`${r}|${a.actividad}|${diaFiltro}`] ?? 0) > 0)
               return hasParent || hasActivity
             }
             return true
@@ -2256,8 +2295,8 @@ export default function PlaneacionPage() {
 
           return (
             <div>
-              {/* Navigator */}
-              <div className="flex items-center gap-3 mb-4 flex-wrap">
+              {/* Navigator — fila superior: título + buscador + select actividad */}
+              <div className="flex items-center gap-3 mb-2 flex-wrap">
                 <h2 className="font-bold text-sm" style={{ color: '#1e3a14' }}>Plan Diario de Producción</h2>
                 {/* Buscador */}
                 <div className="relative flex items-center" style={{ minWidth: 220 }}>
@@ -2276,6 +2315,82 @@ export default function PlaneacionPage() {
                     </button>
                   )}
                 </div>
+                {/* Filtro por actividad — dropdown multi-selección con buscador */}
+                {actividadesUnicas.length > 0 && (
+                  <div className="relative" ref={actDropdownRef}>
+                    {/* Botón disparador */}
+                    <button
+                      onClick={() => setActDropdownOpen(o => !o)}
+                      className="flex items-center gap-1.5 text-xs rounded-lg px-3 py-1.5 font-semibold transition-all"
+                      style={{ background: filtrosActDiario.length > 0 ? '#1e3a14' : '#fff',
+                        border: '1.5px solid #8ab87a',
+                        color: filtrosActDiario.length > 0 ? '#7acc50' : '#1e3a14', whiteSpace: 'nowrap' }}>
+                      {filtrosActDiario.length > 0
+                        ? `Actividad (${filtrosActDiario.length})`
+                        : '— Actividad —'}
+                      <span style={{ fontSize: '0.6rem', opacity: 0.7 }}>{actDropdownOpen ? '▲' : '▼'}</span>
+                    </button>
+                    {/* Panel desplegable */}
+                    {actDropdownOpen && (
+                      <>
+                        {/* Backdrop para cerrar al hacer clic fuera */}
+                        <div className="fixed inset-0 z-40" onClick={() => { setActDropdownOpen(false); setBuscarAct('') }} />
+                        <div className="absolute left-0 z-50 mt-1 rounded-xl shadow-xl"
+                          style={{ background: '#fff', border: '1.5px solid #8ab87a', minWidth: 260, maxHeight: 320, display: 'flex', flexDirection: 'column' }}>
+                          {/* Buscador interno */}
+                          <div className="p-2 border-b" style={{ borderColor: '#c8e0a8' }}>
+                            <input
+                              autoFocus
+                              type="text"
+                              value={buscarAct}
+                              onChange={e => setBuscarAct(e.target.value)}
+                              placeholder="Buscar actividad…"
+                              className="w-full px-2 py-1 rounded text-xs outline-none"
+                              style={{ background: '#f0f7e8', border: '1px solid #a8d888', color: '#1e3a14' }}
+                            />
+                          </div>
+                          {/* Lista de checkboxes */}
+                          <div className="overflow-y-auto" style={{ maxHeight: 220 }}>
+                            {actividadesUnicas
+                              .filter(a => a.toLowerCase().includes(buscarAct.toLowerCase()))
+                              .map(act => (
+                                <label key={act}
+                                  className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-green-50 text-xs"
+                                  style={{ color: '#1e3a14' }}>
+                                  <input
+                                    type="checkbox"
+                                    checked={filtrosActDiario.includes(act)}
+                                    onChange={() => setFiltrosActDiario(prev =>
+                                      prev.includes(act) ? prev.filter(x => x !== act) : [...prev, act]
+                                    )}
+                                    className="accent-green-700"
+                                  />
+                                  <span className="flex-1">{act}</span>
+                                </label>
+                              ))}
+                            {actividadesUnicas.filter(a => a.toLowerCase().includes(buscarAct.toLowerCase())).length === 0 && (
+                              <div className="px-3 py-3 text-xs" style={{ color: '#8a9a80' }}>Sin resultados</div>
+                            )}
+                          </div>
+                          {/* Pie: limpiar */}
+                          {filtrosActDiario.length > 0 && (
+                            <div className="p-2 border-t flex justify-end" style={{ borderColor: '#c8e0a8' }}>
+                              <button
+                                onClick={() => { setFiltrosActDiario([]); setActDropdownOpen(false); setBuscarAct('') }}
+                                className="text-xs px-3 py-1 rounded"
+                                style={{ background: '#fee2e2', border: '1px solid #fca5a5', color: '#dc2626' }}>
+                                Limpiar ({filtrosActDiario.length})
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+              {/* Fila inferior: filtro día + contador + navegación */}
+              <div className="flex items-center gap-3 mb-4 flex-wrap">
                 {/* Filtro por día */}
                 <div className="flex items-center gap-1">
                   <span className="text-xs mr-1" style={{ color: '#6a8a50' }}>Filtrar día:</span>
@@ -2290,11 +2405,9 @@ export default function PlaneacionPage() {
                     </button>
                   ))}
                 </div>
-                {diaFiltro && (
-                  <span className="text-xs" style={{ color: '#6a8a50' }}>
-                    {refsConAct.length} ref{refsConAct.length !== 1 ? 's' : ''}
-                  </span>
-                )}
+                <span className="text-xs" style={{ color: '#6a8a50' }}>
+                  {refsConAct.length} ref{refsConAct.length !== 1 ? 's' : ''}
+                </span>
                 <div className="flex items-center gap-2 ml-auto">
                   <button onClick={() => { const s = prevSem(semDiario); setSemDiario(s); }}
                     className="px-2 py-1 rounded text-xs font-bold hover:brightness-110"
@@ -2332,7 +2445,11 @@ export default function PlaneacionPage() {
                       {refsConAct.map((ref, ri) => {
                         const acts = actPorRef[ref]
                         const prodDesc = acts[0]?.descripcion_producto ?? ref
-                        const sugerido = planData[`${ref}_${semDiario}`]?.produccion ?? 0
+                        const _pdKey = `${ref}_${semDiario}`
+                        const _dmKey = `${ref}|${semDiario}`
+                        const sugerido = (_dmKey in demandaProdOv)
+                          ? (demandaProdOv[_dmKey] ?? 0)
+                          : (planData[_pdKey]?.produccion ?? 0)
                         const rowBg = ri % 2 === 0 ? '#ffffff' : '#f0f7e4'
                         return [
                           // Product header row
@@ -2381,8 +2498,8 @@ export default function PlaneacionPage() {
                               )
                             })}
                           </tr>,
-                          // Activity rows
-                          ...acts.map(a => (
+                          // Activity rows (filtradas por actividad si hay filtro)
+                          ...(filtrosActDiario.length > 0 ? acts.filter(a => filtrosActDiario.includes(a.actividad)) : acts).map(a => (
                             <tr key={`${ref}-${a.actividad}`} style={{ background: rowBg, borderBottom:'1px solid #d0e8b0' }}>
                               <td className="px-3 py-1.5 font-mono sticky left-0 z-10" style={{ background: rowBg, color:'#8a9a80', fontSize:'0.65rem' }}>
                                 {a.sub_referencia ?? ''}
@@ -2492,6 +2609,11 @@ export default function PlaneacionPage() {
               <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm" style={{background:'#4a7ab5'}} /> PEDIDO (adicional manual)</span>
               <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm" style={{background:'#3a7228'}} /> PROD (del FORECAST)</span>
               <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm" style={{background:'#a06828'}} /> SALDO (auto · usa PEDIDO si &gt; 0, si no PROYECTADO)</span>
+              {despachos.length > 0 && (
+                <span className="flex items-center gap-1" style={{ color: '#1e5a3e', fontWeight: 700 }}>
+                  <Truck size={11} /> {despachos.length} entrega{despachos.length !== 1 ? 's' : ''} cargadas
+                </span>
+              )}
             </div>
 
             {inventario.length === 0 ? (
@@ -2639,26 +2761,40 @@ export default function PlaneacionPage() {
                                   </button>
                                 </td>
                                 {/* PROD */}
+                                {((despEnt) => (
                                 <td key={`${s}_prod`} className="py-1.5 text-center relative group/prod"
-                                  style={{ background:'rgba(58,114,40,0.08)', minWidth: 84 }}>
-                                  <input
-                                    type="number" min={0}
-                                    value={produccion || ''}
-                                    placeholder={prodFc > 0 ? prodFc.toLocaleString('es-CO') : '—'}
-                                    onChange={e => saveProdDemandaOv(ref, s, e.target.value)}
-                                    className="w-20 text-center text-xs font-mono rounded px-1 py-0.5 focus:outline-none"
-                                    style={{ background:'transparent', border:'1px solid transparent',
-                                      color: hasProdOv ? (prodOvVal > 0 ? '#2a6a1e' : '#c0ceb0') : (prodFc > 0 ? '#2a6a1e' : '#c0ceb0') }}
-                                    onFocus={e => (e.target as HTMLInputElement).style.borderColor = '#3a7228'}
-                                    onBlur={e => (e.target as HTMLInputElement).style.borderColor = 'transparent'}
-                                    title={hasProdOv && prodFc > 0 ? `Forecast: ${prodFc.toLocaleString('es-CO')} · Borrar para restaurar` : 'Modificar producción en Demanda'}
-                                  />
-                                  {hasProdOv && prodFc > 0 && (
-                                    <div className="absolute top-0 left-0 w-0 h-0"
-                                      style={{ borderStyle:'solid', borderWidth:'6px 6px 0 0', borderColor:'#3a7228 transparent transparent transparent' }}
-                                      title={`Forecast original: ${prodFc.toLocaleString('es-CO')}`} />
+                                  style={{ background: despEnt !== undefined ? 'rgba(0,120,60,0.18)' : 'rgba(58,114,40,0.08)', minWidth: 84 }}>
+                                  {despEnt !== undefined ? (
+                                    <div className="flex flex-col items-center justify-center" style={{ lineHeight: 1.2 }}
+                                      title={`Entrega ${despEnt.toLocaleString('es-CO')} uds ya sumada al inventario — SALDO = INV − PEDIDO`}>
+                                      <div className="flex items-center gap-0.5 font-mono font-bold text-xs" style={{ color: '#1a5a2a' }}>
+                                        <Truck size={9} />{despEnt.toLocaleString('es-CO')}
+                                      </div>
+                                      <div style={{ fontSize: '0.55rem', color: '#4a8a50', fontWeight: 600 }}>en INV</div>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <input
+                                        type="number" min={0}
+                                        value={produccion || ''}
+                                        placeholder={prodFc > 0 ? prodFc.toLocaleString('es-CO') : '—'}
+                                        onChange={e => saveProdDemandaOv(ref, s, e.target.value)}
+                                        className="w-20 text-center text-xs font-mono rounded px-1 py-0.5 focus:outline-none"
+                                        style={{ background:'transparent', border:'1px solid transparent',
+                                          color: hasProdOv ? (prodOvVal > 0 ? '#2a6a1e' : '#c0ceb0') : (prodFc > 0 ? '#2a6a1e' : '#c0ceb0') }}
+                                        onFocus={e => (e.target as HTMLInputElement).style.borderColor = '#3a7228'}
+                                        onBlur={e => (e.target as HTMLInputElement).style.borderColor = 'transparent'}
+                                        title={hasProdOv && prodFc > 0 ? `Forecast: ${prodFc.toLocaleString('es-CO')} · Borrar para restaurar` : 'Modificar producción en Demanda'}
+                                      />
+                                      {hasProdOv && prodFc > 0 && (
+                                        <div className="absolute top-0 left-0 w-0 h-0"
+                                          style={{ borderStyle:'solid', borderWidth:'6px 6px 0 0', borderColor:'#3a7228 transparent transparent transparent' }}
+                                          title={`Forecast original: ${prodFc.toLocaleString('es-CO')}`} />
+                                      )}
+                                    </>
                                   )}
                                 </td>
+                                ))(despMap[planKey])}
                                 {/* SALDO */}
                                 <td key={`${s}_sal`} className="px-2 py-1.5 text-center font-mono font-bold text-xs"
                                   style={{

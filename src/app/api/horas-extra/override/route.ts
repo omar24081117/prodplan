@@ -2,18 +2,28 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
 // GET /api/horas-extra/override?fecha=YYYY-MM-DD
-// Devuelve todos los overrides guardados para una fecha
+// GET /api/horas-extra/override?desde=YYYY-MM-DD&hasta=YYYY-MM-DD  (rango)
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const fecha = searchParams.get('fecha')
-  if (!fecha) return NextResponse.json({ error: 'fecha requerida' }, { status: 400 })
+  const desde = searchParams.get('desde')
+  const hasta = searchParams.get('hasta')
 
   const supabase = await createClient()
-  const { data, error } = await supabase
+  let query = supabase
     .from('horas_extra_overrides')
-    .select('cedula, hora_ingreso, salida_efectiva, horas_extra_manual, horas_nocturnas_manual, recargo_nocturno_manual, minutos_alimentacion, configurado_por_nombre, configurado_en')
-    .eq('fecha', fecha)
+    .select('cedula, fecha, hora_ingreso, salida_efectiva, horas_extra_manual, horas_nocturnas_manual, recargo_nocturno_manual, minutos_alimentacion, configurado_por_nombre, configurado_en')
+    .order('fecha', { ascending: true })
 
+  if (fecha) {
+    query = query.eq('fecha', fecha)
+  } else if (desde && hasta) {
+    query = query.gte('fecha', desde).lte('fecha', hasta)
+  } else {
+    return NextResponse.json({ error: 'Se requiere fecha o desde+hasta' }, { status: 400 })
+  }
+
+  const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data ?? [])
 }

@@ -174,6 +174,17 @@ function TurnoManualModal({
           <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={16} /></button>
         </div>
 
+        {/* Aviso si ya está aprobado/rechazado */}
+        {(registro.aprobado || registro.rechazado) && (
+          <div className="mb-3 px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-2"
+            style={{ background: 'rgba(180,120,0,0.18)', border: '1px solid #92400e', color: '#fbbf24' }}>
+            <AlertTriangle size={13} />
+            {registro.aprobado
+              ? 'Este empleado ya está aprobado. Al guardar, la aprobación se borrará y quedará Pendiente.'
+              : 'Este empleado está rechazado. Al guardar, el rechazo se borrará y quedará Pendiente.'}
+          </div>
+        )}
+
         {/* Info empleado */}
         <div className="mb-4 p-3 rounded-lg" style={{ background: '#1f2937', border: '1px solid #374151' }}>
           <p className="text-white font-semibold text-sm">{registro.nombre}</p>
@@ -492,6 +503,30 @@ export default function HorasExtraPage() {
   const [expHasta, setExpHasta]       = useState(hoyExport)
   const tablaRef = useRef<HTMLDivElement>(null)
 
+  // ── Cierre del día ────────────────────────────────────────────────────────
+  type Cierre = { cerrado_por_nombre: string; cerrado_en: string }
+  const [cierre, setCierre]               = useState<Cierre | null>(null)
+  const [modalCierre, setModalCierre]     = useState(false)
+  const [modalReabrir, setModalReabrir]   = useState(false)
+  const [cedulaCierre, setCedulaCierre]   = useState('')
+  const [errorCierre, setErrorCierre]     = useState('')
+  const [guardandoCierre, setGuardandoCierre] = useState(false)
+
+  // ── Verificación de overrides guardados en BD ─────────────────────────────
+  type OvRow = { cedula: string; fecha: string; nombre?: string; salida_efectiva: string | null; horas_extra_manual: number | null; configurado_por_nombre: string | null; configurado_en: string | null }
+  const [verJulio, setVerJulio]         = useState(false)
+  const [ovJulio, setOvJulio]           = useState<OvRow[]>([])
+  const [loadingJulio, setLoadingJulio] = useState(false)
+
+  async function cargarOverridesJulio() {
+    setLoadingJulio(true)
+    const res = await fetch('/api/horas-extra/override?desde=2026-07-01&hasta=2026-07-31')
+    if (res.ok) setOvJulio(await res.json())
+    else setOvJulio([])
+    setLoadingJulio(false)
+    setVerJulio(true)
+  }
+
   // ── Ausentes ──────────────────────────────────────────────────────────────
   const [personalFijo, setPersonalFijo]       = useState<PersonalFijo[]>([])
   const [ausentismos, setAusentismos]         = useState<Record<string, TipoAusentismo>>({})
@@ -551,18 +586,22 @@ export default function HorasExtraPage() {
 
   const cargar = useCallback(async (f: string) => {
     setLoading(true)
-    const [resReg, resOv, resPers, resAus] = await Promise.all([
+    setCierre(null)
+    const [resReg, resOv, resPers, resAus, resCierre] = await Promise.all([
       fetch(`/api/horas-extra?fecha=${f}`),
       fetch(`/api/horas-extra/override?fecha=${f}`),
       fetch('/api/personal'),
       fetch(`/api/ausentismos?fecha=${f}`),
+      fetch(`/api/horas-extra/cierre?fecha=${f}`),
     ])
-    const dataReg  = await resReg.json()
-    const dataOv   = resOv.ok  ? await resOv.json()  : []
-    const dataPers = resPers.ok ? await resPers.json() : []
-    const dataAus  = resAus.ok  ? await resAus.json()  : []
+    const dataReg    = await resReg.json()
+    const dataOv     = resOv.ok     ? await resOv.json()     : []
+    const dataPers   = resPers.ok   ? await resPers.json()   : []
+    const dataAus    = resAus.ok    ? await resAus.json()    : []
+    const dataCierre = resCierre.ok ? await resCierre.json() : null
 
     setRegistros(dataReg.registros ?? [])
+    setCierre(dataCierre ?? null)
 
     // Personal fijo Operario/Supervisor
     setPersonalFijo((dataPers as PersonalFijo[]).filter(
@@ -694,8 +733,37 @@ export default function HorasExtraPage() {
           <input type="date" value={fecha} onChange={e => setFecha(e.target.value)}
             className="bg-gray-900 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-yellow-500"
           />
+          {/* Botón cerrar día */}
+          {!cierre ? (
+            <button onClick={() => { setCedulaCierre(''); setErrorCierre(''); setModalCierre(true) }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all hover:brightness-110"
+              style={{ background: 'linear-gradient(135deg,#7c2d12,#9a3412)', border: '1px solid #ea580c', color: 'white' }}>
+              🔒 Cerrar día
+            </button>
+          ) : (
+            <button onClick={() => { setCedulaCierre(''); setErrorCierre(''); setModalReabrir(true) }}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all hover:brightness-110"
+              style={{ background: 'rgba(127,29,29,0.3)', border: '1px solid #7f1d1d', color: '#fca5a5' }}>
+              🔓 Reabrir (Director)
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Banner día cerrado */}
+      {cierre && (
+        <div className="mb-4 px-4 py-3 rounded-xl flex items-center gap-3"
+          style={{ background: 'rgba(127,29,29,0.25)', border: '1px solid #991b1b' }}>
+          <span className="text-2xl">🔒</span>
+          <div>
+            <p className="text-red-300 font-bold text-sm">Día cerrado — no se permiten modificaciones</p>
+            <p className="text-red-500 text-xs mt-0.5">
+              Cerrado por <span className="font-semibold">{cierre.cerrado_por_nombre}</span> el {new Date(cierre.cerrado_en).toLocaleString('es-CO', { timeZone: 'America/Bogota', dateStyle: 'medium', timeStyle: 'short' })}
+              {' · '}Solo el Director puede reabrir
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* KPIs */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
@@ -710,6 +778,62 @@ export default function HorasExtraPage() {
             <p className="text-2xl font-bold" style={{ color: k.color }}>{k.value}</p>
           </div>
         ))}
+      </div>
+
+      {/* ── Panel verificación overrides julio ── */}
+      <div className="mb-4">
+        <button
+          onClick={cargarOverridesJulio}
+          disabled={loadingJulio}
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all hover:brightness-110 disabled:opacity-50"
+          style={{ background: '#1c1400', border: '1px solid #854d0e', color: '#fbbf24' }}>
+          {loadingJulio ? <Loader2 size={12} className="animate-spin" /> : <Clock size={12} />}
+          Verificar overrides guardados en julio
+        </button>
+
+        {verJulio && (
+          <div className="mt-3 rounded-xl p-4" style={{ background: '#0d1117', border: '1px solid #1e293b' }}>
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-bold text-white">
+                Overrides guardados en BD · Julio 2026
+              </p>
+              <button onClick={() => setVerJulio(false)} className="text-gray-600 hover:text-white"><X size={14} /></button>
+            </div>
+            {ovJulio.length === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-red-400 font-semibold text-sm">No se encontraron overrides guardados en julio</p>
+                <p className="text-gray-600 text-xs mt-1">Confirma que las correcciones de julio no quedaron registradas en la BD</p>
+              </div>
+            ) : (
+              <>
+                <p className="text-green-400 text-xs mb-3">{ovJulio.length} registro(s) encontrado(s) en la BD</p>
+                <div className="overflow-x-auto">
+                  <table className="text-xs w-full">
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid #1e293b' }}>
+                        {['FECHA','CÉDULA','S. EFECTIVA','HRS MANUAL','CONFIGURADO POR','GUARDADO EN'].map(h => (
+                          <th key={h} className="px-2 py-1.5 text-left font-bold" style={{ color: '#64748b' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {ovJulio.map((ov, i) => (
+                        <tr key={i} style={{ borderBottom: '1px solid #0f172a' }}>
+                          <td className="px-2 py-1.5 font-mono text-yellow-400">{ov.fecha}</td>
+                          <td className="px-2 py-1.5 font-mono text-slate-400">{ov.cedula}</td>
+                          <td className="px-2 py-1.5 font-mono text-orange-300">{ov.salida_efectiva ?? '—'}</td>
+                          <td className="px-2 py-1.5 font-mono text-amber-300">{ov.horas_extra_manual != null ? `${ov.horas_extra_manual}h` : '—'}</td>
+                          <td className="px-2 py-1.5 text-slate-400">{ov.configurado_por_nombre ?? '—'}</td>
+                          <td className="px-2 py-1.5 text-slate-600 font-mono">{ov.configurado_en ? ov.configurado_en.slice(0,16).replace('T',' ') : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Leyenda */}
@@ -888,38 +1012,42 @@ export default function HorasExtraPage() {
 
                     {/* ACCIÓN */}
                     <td className="px-2 py-2">
-                      <div className="flex items-center gap-1 flex-wrap">
-                        <button
-                          onClick={() => setModalTurno(registros.find(x => x.cedula === r.cedula) ?? r)}
-                          title="Configurar horario"
-                          className="px-2 py-1 rounded font-semibold flex items-center gap-0.5 transition-all hover:brightness-125"
-                          style={{ background: 'rgba(30,64,175,0.25)', border: '1px solid #1d4ed8', color: '#93c5fd', fontSize:'0.65rem' }}
-                        >
-                          <Settings size={9} /> Config
-                        </button>
-                        {tieneExtra && !r.aprobado && !r.rechazado && (
-                          <>
-                            <button onClick={() => setModal(r)}
-                              className="px-2 py-1 rounded font-semibold transition-all hover:brightness-125"
-                              style={{ background: '#14532d', border: '1px solid #166534', color: '#86efac', fontSize:'0.65rem' }}>
-                              ✓ Apro
-                            </button>
-                            <button onClick={() => setModalRechazo(r)}
-                              className="px-2 py-1 rounded font-semibold transition-all hover:brightness-125"
-                              style={{ background: '#450a0a', border: '1px solid #7f1d1d', color: '#fca5a5', fontSize:'0.65rem' }}>
-                              ✕ Rec
-                            </button>
-                          </>
-                        )}
-                        {(r.aprobado || r.rechazado) && tieneExtra && (
+                      {cierre ? (
+                        <span className="text-xs px-2 py-1 rounded" style={{ background: 'rgba(127,29,29,0.2)', color: '#ef4444', border: '1px solid #7f1d1d' }}>🔒 Cerrado</span>
+                      ) : (
+                        <div className="flex items-center gap-1 flex-wrap">
                           <button
-                            onClick={() => r.aprobado ? setModal(r) : setModalRechazo(r)}
-                            className="px-2 py-1 rounded font-semibold transition-all hover:brightness-125"
-                            style={{ background: 'rgba(71,85,105,0.3)', border: '1px solid #475569', color: '#94a3b8', fontSize:'0.65rem' }}>
-                            ↺ Cambiar
+                            onClick={() => setModalTurno(registros.find(x => x.cedula === r.cedula) ?? r)}
+                            title="Configurar horario"
+                            className="px-2 py-1 rounded font-semibold flex items-center gap-0.5 transition-all hover:brightness-125"
+                            style={{ background: 'rgba(30,64,175,0.25)', border: '1px solid #1d4ed8', color: '#93c5fd', fontSize:'0.65rem' }}
+                          >
+                            <Settings size={9} /> Config
                           </button>
-                        )}
-                      </div>
+                          {tieneExtra && !r.aprobado && !r.rechazado && (
+                            <>
+                              <button onClick={() => setModal(r)}
+                                className="px-2 py-1 rounded font-semibold transition-all hover:brightness-125"
+                                style={{ background: '#14532d', border: '1px solid #166534', color: '#86efac', fontSize:'0.65rem' }}>
+                                ✓ Apro
+                              </button>
+                              <button onClick={() => setModalRechazo(r)}
+                                className="px-2 py-1 rounded font-semibold transition-all hover:brightness-125"
+                                style={{ background: '#450a0a', border: '1px solid #7f1d1d', color: '#fca5a5', fontSize:'0.65rem' }}>
+                                ✕ Rec
+                              </button>
+                            </>
+                          )}
+                          {(r.aprobado || r.rechazado) && tieneExtra && (
+                            <button
+                              onClick={() => r.aprobado ? setModal(r) : setModalRechazo(r)}
+                              className="px-2 py-1 rounded font-semibold transition-all hover:brightness-125"
+                              style={{ background: 'rgba(71,85,105,0.3)', border: '1px solid #475569', color: '#94a3b8', fontSize:'0.65rem' }}>
+                              ↺ Cambiar
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 )
@@ -1050,11 +1178,8 @@ export default function HorasExtraPage() {
           overrideActual={overrides[modalTurno.cedula]}
           onClose={() => setModalTurno(null)}
           onGuardar={async (cedula, ov) => {
-            // 1. Actualizar estado local inmediatamente
-            setOverrides(prev => ({ ...prev, [cedula]: ov }))
-            setModalTurno(null)
-            // 2. Persistir en BD para que sobreviva recargas
-            await fetch('/api/horas-extra/override', {
+            // 1. Guardar override en BD — si falla, avisar y no cerrar
+            const res = await fetch('/api/horas-extra/override', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -1068,8 +1193,124 @@ export default function HorasExtraPage() {
                 minutos_alimentacion:    ov.minutos_alimentacion    ?? null,
               }),
             })
+            if (!res.ok) {
+              const e = await res.json().catch(() => ({}))
+              alert('Error al guardar la configuración: ' + (e.error ?? 'error desconocido'))
+              return
+            }
+            // 2. Si ya estaba aprobado/rechazado, limpiar la aprobación para que quede Pendiente
+            const registroActual = registros.find(x => x.cedula === cedula)
+            if (registroActual?.aprobado || registroActual?.rechazado) {
+              await fetch('/api/horas-extra/aprobar', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cedula_empleado: cedula, fecha }),
+              })
+              setRegistros(prev => prev.map(r => r.cedula === cedula
+                ? { ...r, aprobado: false, rechazado: false, aprobado_por_nombre: null, aprobado_en: null, rechazado_por_nombre: null, rechazado_en: null }
+                : r
+              ))
+            }
+            // 3. Actualizar override en estado local
+            setOverrides(prev => ({ ...prev, [cedula]: ov }))
+            setModalTurno(null)
           }}
         />
+      )}
+
+      {/* Modal cerrar día */}
+      {modalCierre && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}>
+          <div className="w-full max-w-sm rounded-2xl p-6 shadow-2xl" style={{ background: '#111827', border: '1px solid #374151' }}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-bold text-base flex items-center gap-2">🔒 Cerrar día</h3>
+              <button onClick={() => setModalCierre(false)} className="text-gray-500 hover:text-white"><X size={16} /></button>
+            </div>
+            <div className="mb-4 p-3 rounded-lg" style={{ background: 'rgba(127,29,29,0.2)', border: '1px solid #7f1d1d' }}>
+              <p className="text-red-300 text-xs font-semibold">Al cerrar el día ningún usuario podrá modificar configs, aprobaciones o rechazos.</p>
+              <p className="text-red-500 text-xs mt-1">Solo un Director podrá reabrir.</p>
+            </div>
+            <div className="mb-4">
+              <label className="text-xs text-gray-400 block mb-1">Cédula de quien cierra (Supervisor / Analista / Director)</label>
+              <input autoFocus type="text" inputMode="numeric" value={cedulaCierre}
+                onChange={e => { setCedulaCierre(e.target.value); setErrorCierre('') }}
+                placeholder="Cédula"
+                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:border-orange-500"
+              />
+              {errorCierre && <p className="text-red-400 text-xs mt-1 flex items-center gap-1"><AlertTriangle size={11} />{errorCierre}</p>}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setModalCierre(false)}
+                className="flex-1 py-2 rounded-lg text-sm text-gray-400 hover:text-white"
+                style={{ background: '#1f2937', border: '1px solid #374151' }}>Cancelar</button>
+              <button disabled={!cedulaCierre.trim() || guardandoCierre}
+                onClick={async () => {
+                  setGuardandoCierre(true)
+                  const res = await fetch('/api/horas-extra/cierre', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fecha, cedula: cedulaCierre.trim() }),
+                  })
+                  const data = await res.json()
+                  setGuardandoCierre(false)
+                  if (!res.ok) { setErrorCierre(data.error ?? 'Error'); return }
+                  setCierre({ cerrado_por_nombre: data.cerrado_por, cerrado_en: new Date().toISOString() })
+                  setModalCierre(false)
+                }}
+                className="flex-1 py-2 rounded-lg text-sm font-semibold text-white flex items-center justify-center gap-1.5 disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg,#7c2d12,#9a3412)', border: '1px solid #ea580c' }}>
+                {guardandoCierre ? <Loader2 size={14} className="animate-spin" /> : '🔒'} Cerrar día
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal reabrir día (solo Director) */}
+      {modalReabrir && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}>
+          <div className="w-full max-w-sm rounded-2xl p-6 shadow-2xl" style={{ background: '#111827', border: '1px solid #374151' }}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-white font-bold text-base flex items-center gap-2">🔓 Reabrir día</h3>
+              <button onClick={() => setModalReabrir(false)} className="text-gray-500 hover:text-white"><X size={16} /></button>
+            </div>
+            <div className="mb-4 p-3 rounded-lg" style={{ background: 'rgba(30,58,138,0.2)', border: '1px solid #1e3a8a' }}>
+              <p className="text-blue-300 text-xs font-semibold">Solo el Director puede reabrir un día cerrado.</p>
+            </div>
+            <div className="mb-4">
+              <label className="text-xs text-gray-400 block mb-1">Cédula del Director</label>
+              <input autoFocus type="text" inputMode="numeric" value={cedulaCierre}
+                onChange={e => { setCedulaCierre(e.target.value); setErrorCierre('') }}
+                placeholder="Cédula"
+                className="w-full bg-gray-800 border border-blue-800 text-white rounded-lg px-3 py-2.5 text-sm font-mono focus:outline-none focus:border-blue-400"
+              />
+              {errorCierre && <p className="text-red-400 text-xs mt-1 flex items-center gap-1"><AlertTriangle size={11} />{errorCierre}</p>}
+            </div>
+            <div className="flex gap-2">
+              <button onClick={() => setModalReabrir(false)}
+                className="flex-1 py-2 rounded-lg text-sm text-gray-400 hover:text-white"
+                style={{ background: '#1f2937', border: '1px solid #374151' }}>Cancelar</button>
+              <button disabled={!cedulaCierre.trim() || guardandoCierre}
+                onClick={async () => {
+                  setGuardandoCierre(true)
+                  const res = await fetch('/api/horas-extra/cierre', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fecha, cedula: cedulaCierre.trim() }),
+                  })
+                  const data = await res.json()
+                  setGuardandoCierre(false)
+                  if (!res.ok) { setErrorCierre(data.error ?? 'Error'); return }
+                  setCierre(null)
+                  setModalReabrir(false)
+                }}
+                className="flex-1 py-2 rounded-lg text-sm font-semibold text-white flex items-center justify-center gap-1.5 disabled:opacity-50"
+                style={{ background: 'linear-gradient(135deg,#1e3a8a,#1d4ed8)', border: '1px solid #3b82f6' }}>
+                {guardandoCierre ? <Loader2 size={14} className="animate-spin" /> : '🔓'} Reabrir
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Modal aprobación */}
