@@ -58,9 +58,20 @@ for (const r of data) {
   if (!cedula || !fecha) continue
   fechasUnicas.add(fecha)
 
-  // Override: cuando la salida efectiva difiere de la normalizada y hay asistencia
-  if (entReal && salidaEfec && salidaEfec !== salidaNorm && salidaEfec !== '15:30' && salidaEfec !== '22:30') {
-    overrides.push({ cedula, fecha, hora_ingreso: entReal, salida_efectiva: salidaEfec, configurado_por_nombre: 'Importación Julio 2026', configurado_en: new Date().toISOString() })
+  // Override: cualquier fila con HE aprobadas en el Excel
+  // Congelar S.EFEC., MIN+ y HRS+ exactamente como aprobados en el reporte
+  const recNocturno = parseNum(r[10])  // columna K = REC.
+  if (entReal && hrsExtra != null && hrsExtra > 0) {
+    overrides.push({
+      cedula,
+      fecha,
+      hora_ingreso:             entReal,
+      salida_efectiva:          salidaEfec,   // S.EFEC. del Excel
+      horas_extra_manual:       hrsExtra,      // HRS+ del Excel — congela el valor aprobado
+      recargo_nocturno_manual:  recNocturno,   // REC. del Excel (nocturno si aplica)
+      configurado_por_nombre: 'Importación Julio 2026',
+      configurado_en: new Date().toISOString(),
+    })
   }
 
   // Aprobación
