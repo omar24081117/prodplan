@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   const supabase = await createClient()
   let query = supabase
     .from('horas_extra_overrides')
-    .select('cedula, fecha, hora_ingreso, salida_efectiva, horas_extra_manual, horas_nocturnas_manual, recargo_nocturno_manual, minutos_alimentacion, configurado_por_nombre, configurado_en')
+    .select('cedula, fecha, hora_ingreso, salida_efectiva, horas_extra_manual, horas_nocturnas_manual, recargo_nocturno_manual, configurado_por_nombre, configurado_en')
     .order('fecha', { ascending: true })
 
   if (fecha) {
