@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic'
+
 const toMins = (t: string) => {
   if (!t) return -1
   const [h, m] = t.split(':').map(Number)
