@@ -61,7 +61,8 @@ const toMins = (t: string) => {
 
 function calcConOverride(r: Registro, ov: Override) {
   // ── Modo jornada adicional: horas extra ingresadas directamente ──
-  const tieneManualDiurno = (ov.horas_extra_manual ?? 0) > 0
+  // horas_extra_manual = 0 explícito también congela (impide recalcular día libre)
+  const tieneManualDiurno = ov.horas_extra_manual != null
   const tieneManualNocturno = (ov.horas_nocturnas_manual ?? 0) > 0
   if (tieneManualDiurno || tieneManualNocturno) {
     const minExtra = Math.round((ov.horas_extra_manual ?? 0) * 60)
@@ -641,7 +642,7 @@ export default function HorasExtraPage() {
     // Overrides guardados
     const ovMap: Record<string, Override> = {}
     for (const ov of dataOv) {
-      if (ov.hora_ingreso || ov.salida_efectiva || ov.horas_extra_manual || ov.horas_nocturnas_manual || ov.minutos_alimentacion) {
+      if (ov.hora_ingreso || ov.salida_efectiva || ov.horas_extra_manual != null || ov.horas_nocturnas_manual || ov.minutos_alimentacion) {
         ovMap[ov.cedula] = {
           hora_ingreso:            ov.hora_ingreso            ?? '',
           salida_efectiva:         ov.salida_efectiva         ?? '',
