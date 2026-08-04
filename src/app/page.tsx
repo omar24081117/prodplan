@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Leaf, Factory, Truck, LayoutDashboard, X, Mail, Lock, Loader2, Warehouse } from 'lucide-react'
+import { Leaf, Factory, Truck, LayoutDashboard, X, Mail, Lock, Loader2, Warehouse, Users } from 'lucide-react'
 import LeafBackground from '@/components/LeafBackground'
 
 export default function Home() {
@@ -126,6 +126,21 @@ export default function Home() {
           </div>
           <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.12)' }}>
             <Truck size={36} strokeWidth={1.5} className="text-white" />
+          </div>
+        </button>
+
+        {/* RRHH */}
+        <button
+          onClick={() => router.push('/rrhh')}
+          className="w-full rounded-2xl p-6 flex items-center justify-between transition-all hover:scale-[1.02] active:scale-[0.98]"
+          style={{ background: 'linear-gradient(135deg, #14532d, #166534)', border: '1px solid #22c55e', boxShadow: '0 4px 20px rgba(34,197,94,0.2)' }}
+        >
+          <div className="text-left">
+            <p className="text-white font-bold text-xl">RRHH</p>
+            <p className="text-green-200/70 text-sm mt-0.5">Recursos humanos y nómina</p>
+          </div>
+          <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.12)' }}>
+            <Users size={36} strokeWidth={1.5} className="text-white" />
           </div>
         </button>
 
