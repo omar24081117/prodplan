@@ -15,7 +15,7 @@ const CARDS = [
     shadow:'rgba(60,140,40,0.3)',
     textColor: 'text-green-200/70',
     icon: (
-      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white">
         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
         <circle cx="9" cy="7" r="4"/>
         <polyline points="16 11 18 13 22 9"/>
@@ -30,7 +30,7 @@ const CARDS = [
     border:'#7aaa30',
     shadow:'rgba(90,140,20,0.3)',
     textColor: 'text-lime-200/70',
-    icon: <Factory size={28} strokeWidth={1.5} className="text-white" />,
+    icon: <Factory size={32} strokeWidth={1.5} className="text-white" />,
   },
   {
     label: 'Almacén',
@@ -40,7 +40,7 @@ const CARDS = [
     border:'#b45309',
     shadow:'rgba(180,80,10,0.3)',
     textColor: 'text-amber-200/70',
-    icon: <Warehouse size={28} strokeWidth={1.5} className="text-white" />,
+    icon: <Warehouse size={32} strokeWidth={1.5} className="text-white" />,
   },
   {
     label: 'Control de Despachos',
@@ -50,7 +50,7 @@ const CARDS = [
     border:'#3a7abf',
     shadow:'rgba(30,100,180,0.3)',
     textColor: 'text-blue-200/70',
-    icon: <Truck size={28} strokeWidth={1.5} className="text-white" />,
+    icon: <Truck size={32} strokeWidth={1.5} className="text-white" />,
   },
   {
     label: 'RRHH',
@@ -60,7 +60,7 @@ const CARDS = [
     border:'#22c55e',
     shadow:'rgba(34,197,94,0.2)',
     textColor: 'text-green-200/70',
-    icon: <Users size={28} strokeWidth={1.5} className="text-white" />,
+    icon: <Users size={32} strokeWidth={1.5} className="text-white" />,
   },
   {
     label: 'Solicitudes y Mensajería',
@@ -70,7 +70,7 @@ const CARDS = [
     border:'#22b8cc',
     shadow:'rgba(34,184,204,0.2)',
     textColor: 'text-cyan-200/70',
-    icon: <ShoppingCart size={28} strokeWidth={1.5} className="text-white" />,
+    icon: <ShoppingCart size={32} strokeWidth={1.5} className="text-white" />,
   },
 ]
 
@@ -124,17 +124,17 @@ export default function Home() {
       </div>
 
       {/* Grid de módulos */}
-      <div className="relative z-10 w-full max-w-2xl grid grid-cols-2 gap-3">
+      <div className="relative z-10 w-full max-w-2xl grid grid-cols-2 gap-4">
 
         {CARDS.map(c => (
           <button key={c.href} onClick={() => router.push(c.href)}
-            className="rounded-2xl p-4 flex items-center justify-between transition-all hover:scale-[1.02] active:scale-[0.98] text-left"
+            className="rounded-2xl p-5 flex items-center justify-between transition-all hover:scale-[1.02] active:scale-[0.98] text-left"
             style={{ background: c.grad, border: `1px solid ${c.border}`, boxShadow: `0 4px 16px ${c.shadow}` }}>
             <div>
-              <p className="text-white font-bold text-base leading-tight">{c.label}</p>
-              <p className={`text-xs mt-0.5 ${c.textColor}`}>{c.desc}</p>
+              <p className="text-white font-bold text-lg leading-tight">{c.label}</p>
+              <p className={`text-sm mt-1 ${c.textColor}`}>{c.desc}</p>
             </div>
-            <div className="p-2.5 rounded-xl shrink-0 ml-3" style={{ background: 'rgba(255,255,255,0.12)' }}>
+            <div className="p-3 rounded-xl shrink-0 ml-3" style={{ background: 'rgba(255,255,255,0.12)' }}>
               {c.icon}
             </div>
           </button>
