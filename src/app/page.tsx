@@ -65,7 +65,7 @@ const CARDS = [
   {
     label: 'Solicitudes y Mensajería',
     desc:  'Compras internas y comunicación',
-    href:  '/solicitudes',
+    href:  '/solicitudes/compras',
     grad:  'linear-gradient(135deg, #0e4f5c, #0f6674)',
     border:'#22b8cc',
     shadow:'rgba(34,184,204,0.2)',
@@ -124,17 +124,17 @@ export default function Home() {
       </div>
 
       {/* Grid de módulos */}
-      <div className="relative z-10 w-full max-w-2xl grid grid-cols-2 gap-4">
+      <div className="relative z-10 w-full max-w-3xl grid grid-cols-2 gap-5">
 
         {CARDS.map(c => (
           <button key={c.href} onClick={() => router.push(c.href)}
-            className="rounded-2xl p-5 flex items-center justify-between transition-all hover:scale-[1.02] active:scale-[0.98] text-left"
-            style={{ background: c.grad, border: `1px solid ${c.border}`, boxShadow: `0 4px 16px ${c.shadow}` }}>
+            className="rounded-2xl p-7 flex items-center justify-between transition-all hover:scale-[1.02] active:scale-[0.98] text-left"
+            style={{ background: c.grad, border: `1px solid ${c.border}`, boxShadow: `0 4px 20px ${c.shadow}` }}>
             <div>
-              <p className="text-white font-bold text-lg leading-tight">{c.label}</p>
-              <p className={`text-sm mt-1 ${c.textColor}`}>{c.desc}</p>
+              <p className="text-white font-bold text-xl leading-tight">{c.label}</p>
+              <p className={`text-sm mt-1.5 ${c.textColor}`}>{c.desc}</p>
             </div>
-            <div className="p-3 rounded-xl shrink-0 ml-3" style={{ background: 'rgba(255,255,255,0.12)' }}>
+            <div className="p-3.5 rounded-xl shrink-0 ml-4" style={{ background: 'rgba(255,255,255,0.12)' }}>
               {c.icon}
             </div>
           </button>
@@ -142,14 +142,14 @@ export default function Home() {
 
         {/* Panel de Control — ocupa fila completa */}
         <button onClick={abrirLogin}
-          className="col-span-2 rounded-2xl p-4 flex items-center justify-between transition-all hover:scale-[1.01] active:scale-[0.99] text-left"
-          style={{ background: 'linear-gradient(135deg, #3a1a5c, #4d1e7a)', border: '1px solid #8a3abf', boxShadow: '0 4px 16px rgba(100,30,180,0.3)' }}>
+          className="col-span-2 rounded-2xl p-6 flex items-center justify-between transition-all hover:scale-[1.01] active:scale-[0.99] text-left"
+          style={{ background: 'linear-gradient(135deg, #3a1a5c, #4d1e7a)', border: '1px solid #8a3abf', boxShadow: '0 4px 20px rgba(100,30,180,0.3)' }}>
           <div>
-            <p className="text-white font-bold text-base">Panel de Control</p>
-            <p className="text-purple-200/70 text-xs mt-0.5">Administración y configuración del sistema</p>
+            <p className="text-white font-bold text-xl">Panel de Control</p>
+            <p className="text-purple-200/70 text-sm mt-1">Administración y configuración del sistema</p>
           </div>
-          <div className="p-2.5 rounded-xl shrink-0 ml-3" style={{ background: 'rgba(255,255,255,0.12)' }}>
-            <LayoutDashboard size={28} strokeWidth={1.5} className="text-white" />
+          <div className="p-3.5 rounded-xl shrink-0 ml-4" style={{ background: 'rgba(255,255,255,0.12)' }}>
+            <LayoutDashboard size={36} strokeWidth={1.5} className="text-white" />
           </div>
         </button>
 
