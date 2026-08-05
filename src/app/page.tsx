@@ -2,17 +2,86 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Leaf, Factory, Truck, LayoutDashboard, X, Mail, Lock, Loader2, Warehouse, Users } from 'lucide-react'
+import { Leaf, Factory, Truck, LayoutDashboard, X, Mail, Lock, Loader2, Warehouse, Users, ShoppingCart } from 'lucide-react'
 import LeafBackground from '@/components/LeafBackground'
+
+const CARDS = [
+  {
+    label: 'Asistencia',
+    desc:  'Registra tu entrada y salida',
+    href:  '/asistencia',
+    grad:  'linear-gradient(135deg, #2e6e20, #3d8830)',
+    border:'#5aaa40',
+    shadow:'rgba(60,140,40,0.3)',
+    textColor: 'text-green-200/70',
+    icon: (
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <polyline points="16 11 18 13 22 9"/>
+      </svg>
+    ),
+  },
+  {
+    label: 'Producción',
+    desc:  'Ejecución y administración',
+    href:  '/produccion',
+    grad:  'linear-gradient(135deg, #3d5c18, #527820)',
+    border:'#7aaa30',
+    shadow:'rgba(90,140,20,0.3)',
+    textColor: 'text-lime-200/70',
+    icon: <Factory size={28} strokeWidth={1.5} className="text-white" />,
+  },
+  {
+    label: 'Almacén',
+    desc:  'Inventario y existencias',
+    href:  '/almacen',
+    grad:  'linear-gradient(135deg, #5c2a08, #7a3a0a)',
+    border:'#b45309',
+    shadow:'rgba(180,80,10,0.3)',
+    textColor: 'text-amber-200/70',
+    icon: <Warehouse size={28} strokeWidth={1.5} className="text-white" />,
+  },
+  {
+    label: 'Control de Despachos',
+    desc:  'Gestión y seguimiento de salidas',
+    href:  '/despachos',
+    grad:  'linear-gradient(135deg, #1a3a5c, #1e4d7a)',
+    border:'#3a7abf',
+    shadow:'rgba(30,100,180,0.3)',
+    textColor: 'text-blue-200/70',
+    icon: <Truck size={28} strokeWidth={1.5} className="text-white" />,
+  },
+  {
+    label: 'RRHH',
+    desc:  'Recursos humanos y nómina',
+    href:  '/rrhh',
+    grad:  'linear-gradient(135deg, #14532d, #166534)',
+    border:'#22c55e',
+    shadow:'rgba(34,197,94,0.2)',
+    textColor: 'text-green-200/70',
+    icon: <Users size={28} strokeWidth={1.5} className="text-white" />,
+  },
+  {
+    label: 'Solicitudes y Mensajería',
+    desc:  'Compras internas y comunicación',
+    href:  '/solicitudes',
+    grad:  'linear-gradient(135deg, #0e4f5c, #0f6674)',
+    border:'#22b8cc',
+    shadow:'rgba(34,184,204,0.2)',
+    textColor: 'text-cyan-200/70',
+    icon: <ShoppingCart size={28} strokeWidth={1.5} className="text-white" />,
+  },
+]
 
 export default function Home() {
   const router = useRouter()
 
-  const [showLogin, setShowLogin]   = useState(false)
-  const [panelEmail, setPanelEmail] = useState('')
-  const [panelPass, setPanelPass]   = useState('')
+  const [showLogin,    setShowLogin]    = useState(false)
+  const [panelEmail,   setPanelEmail]   = useState('')
+  const [panelPass,    setPanelPass]    = useState('')
   const [panelLoading, setPanelLoading] = useState(false)
-  const [panelError, setPanelError] = useState('')
+  const [panelError,   setPanelError]   = useState('')
 
   async function loginPanel(e: React.FormEvent) {
     e.preventDefault()
@@ -25,211 +94,100 @@ export default function Home() {
         body: JSON.stringify({ email: panelEmail.trim(), password: panelPass }),
       })
       const data = await res.json()
-      if (!res.ok) {
-        setPanelError(data.error || 'Acceso denegado')
-      } else {
-        router.push('/admin')
-      }
+      if (!res.ok) setPanelError(data.error || 'Acceso denegado')
+      else router.push('/admin')
     } catch {
-      setPanelError('Error de conexión. Verifica tu internet.')
+      setPanelError('Error de conexión.')
     } finally {
       setPanelLoading(false)
     }
   }
 
   function abrirLogin() {
-    setPanelEmail('')
-    setPanelPass('')
-    setPanelError('')
-    setShowLogin(true)
+    setPanelEmail(''); setPanelPass(''); setPanelError(''); setShowLogin(true)
   }
 
   return (
-    <main
-      className="relative min-h-screen flex flex-col items-center justify-center p-6 gap-8"
-      style={{ background: '#d4e8b8' }}
-    >
+    <main className="relative min-h-screen flex flex-col items-center justify-center p-4 gap-5"
+      style={{ background: '#d4e8b8' }}>
       <LeafBackground />
 
       {/* Marca */}
-      <div className="relative z-10 text-center mb-4">
-        <div className="flex items-center justify-center mb-3">
-          <div className="p-4 rounded-full" style={{ background: 'rgba(60,130,40,0.25)', border: '1px solid rgba(90,170,60,0.4)' }}>
-            <Leaf size={52} strokeWidth={1.5} className="text-green-300" />
+      <div className="relative z-10 text-center">
+        <div className="flex items-center justify-center mb-2">
+          <div className="p-3 rounded-full" style={{ background: 'rgba(60,130,40,0.25)', border: '1px solid rgba(90,170,60,0.4)' }}>
+            <Leaf size={36} strokeWidth={1.5} className="text-green-300" />
           </div>
         </div>
-        <h1 className="text-4xl font-bold text-white tracking-wide">PRODPLAN</h1>
-        <p className="text-gray-400 text-sm mt-2">Sistema de planeación de producción natural</p>
+        <h1 className="text-3xl font-bold text-white tracking-wide">PRODPLAN</h1>
+        <p className="text-gray-400 text-xs mt-1">Sistema de planeación de producción natural</p>
       </div>
 
-      {/* Botones principales */}
-      <div className="relative z-10 w-full max-w-sm flex flex-col gap-4">
+      {/* Grid de módulos */}
+      <div className="relative z-10 w-full max-w-2xl grid grid-cols-2 gap-3">
 
-        {/* Asistencia */}
-        <button
-          onClick={() => router.push('/asistencia')}
-          className="w-full rounded-2xl p-6 flex items-center justify-between transition-all hover:scale-[1.02] active:scale-[0.98]"
-          style={{ background: 'linear-gradient(135deg, #2e6e20, #3d8830)', border: '1px solid #5aaa40', boxShadow: '0 4px 20px rgba(60,140,40,0.3)' }}
-        >
-          <div className="text-left">
-            <p className="text-white font-bold text-xl">Asistencia</p>
-            <p className="text-green-200/70 text-sm mt-0.5">Registra tu entrada y salida</p>
-          </div>
-          <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.12)' }}>
-            <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="text-white">
-              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-              <circle cx="9" cy="7" r="4"/>
-              <polyline points="16 11 18 13 22 9"/>
-            </svg>
-          </div>
-        </button>
+        {CARDS.map(c => (
+          <button key={c.href} onClick={() => router.push(c.href)}
+            className="rounded-2xl p-4 flex items-center justify-between transition-all hover:scale-[1.02] active:scale-[0.98] text-left"
+            style={{ background: c.grad, border: `1px solid ${c.border}`, boxShadow: `0 4px 16px ${c.shadow}` }}>
+            <div>
+              <p className="text-white font-bold text-base leading-tight">{c.label}</p>
+              <p className={`text-xs mt-0.5 ${c.textColor}`}>{c.desc}</p>
+            </div>
+            <div className="p-2.5 rounded-xl shrink-0 ml-3" style={{ background: 'rgba(255,255,255,0.12)' }}>
+              {c.icon}
+            </div>
+          </button>
+        ))}
 
-        {/* Producción */}
-        <button
-          onClick={() => router.push('/produccion')}
-          className="w-full rounded-2xl p-6 flex items-center justify-between transition-all hover:scale-[1.02] active:scale-[0.98]"
-          style={{ background: 'linear-gradient(135deg, #3d5c18, #527820)', border: '1px solid #7aaa30', boxShadow: '0 4px 20px rgba(90,140,20,0.3)' }}
-        >
-          <div className="text-left">
-            <p className="text-white font-bold text-xl">Producción</p>
-            <p className="text-lime-200/70 text-sm mt-0.5">Ejecución y administración</p>
+        {/* Panel de Control — ocupa fila completa */}
+        <button onClick={abrirLogin}
+          className="col-span-2 rounded-2xl p-4 flex items-center justify-between transition-all hover:scale-[1.01] active:scale-[0.99] text-left"
+          style={{ background: 'linear-gradient(135deg, #3a1a5c, #4d1e7a)', border: '1px solid #8a3abf', boxShadow: '0 4px 16px rgba(100,30,180,0.3)' }}>
+          <div>
+            <p className="text-white font-bold text-base">Panel de Control</p>
+            <p className="text-purple-200/70 text-xs mt-0.5">Administración y configuración del sistema</p>
           </div>
-          <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.12)' }}>
-            <Factory size={36} strokeWidth={1.5} className="text-white" />
-          </div>
-        </button>
-
-        {/* Almacén */}
-        <button
-          onClick={() => router.push('/almacen')}
-          className="w-full rounded-2xl p-6 flex items-center justify-between transition-all hover:scale-[1.02] active:scale-[0.98]"
-          style={{ background: 'linear-gradient(135deg, #5c2a08, #7a3a0a)', border: '1px solid #b45309', boxShadow: '0 4px 20px rgba(180,80,10,0.3)' }}
-        >
-          <div className="text-left">
-            <p className="text-white font-bold text-xl">Almacén</p>
-            <p className="text-amber-200/70 text-sm mt-0.5">Inventario y control de existencias</p>
-          </div>
-          <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.12)' }}>
-            <Warehouse size={36} strokeWidth={1.5} className="text-white" />
-          </div>
-        </button>
-
-        {/* Control de Despachos */}
-        <button
-          onClick={() => router.push('/despachos')}
-          className="w-full rounded-2xl p-6 flex items-center justify-between transition-all hover:scale-[1.02] active:scale-[0.98]"
-          style={{ background: 'linear-gradient(135deg, #1a3a5c, #1e4d7a)', border: '1px solid #3a7abf', boxShadow: '0 4px 20px rgba(30,100,180,0.3)' }}
-        >
-          <div className="text-left">
-            <p className="text-white font-bold text-xl">Control de Despachos</p>
-            <p className="text-blue-200/70 text-sm mt-0.5">Gestión y seguimiento de salidas</p>
-          </div>
-          <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.12)' }}>
-            <Truck size={36} strokeWidth={1.5} className="text-white" />
-          </div>
-        </button>
-
-        {/* RRHH */}
-        <button
-          onClick={() => router.push('/rrhh')}
-          className="w-full rounded-2xl p-6 flex items-center justify-between transition-all hover:scale-[1.02] active:scale-[0.98]"
-          style={{ background: 'linear-gradient(135deg, #14532d, #166534)', border: '1px solid #22c55e', boxShadow: '0 4px 20px rgba(34,197,94,0.2)' }}
-        >
-          <div className="text-left">
-            <p className="text-white font-bold text-xl">RRHH</p>
-            <p className="text-green-200/70 text-sm mt-0.5">Recursos humanos y nómina</p>
-          </div>
-          <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.12)' }}>
-            <Users size={36} strokeWidth={1.5} className="text-white" />
-          </div>
-        </button>
-
-        {/* Panel de Control — último, requiere login */}
-        <button
-          onClick={abrirLogin}
-          className="w-full rounded-2xl p-6 flex items-center justify-between transition-all hover:scale-[1.02] active:scale-[0.98]"
-          style={{ background: 'linear-gradient(135deg, #3a1a5c, #4d1e7a)', border: '1px solid #8a3abf', boxShadow: '0 4px 20px rgba(100,30,180,0.3)' }}
-        >
-          <div className="text-left">
-            <p className="text-white font-bold text-xl">Panel de Control</p>
-            <p className="text-purple-200/70 text-sm mt-0.5">Administración y configuración</p>
-          </div>
-          <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.12)' }}>
-            <LayoutDashboard size={36} strokeWidth={1.5} className="text-white" />
+          <div className="p-2.5 rounded-xl shrink-0 ml-3" style={{ background: 'rgba(255,255,255,0.12)' }}>
+            <LayoutDashboard size={28} strokeWidth={1.5} className="text-white" />
           </div>
         </button>
 
       </div>
 
-      <p className="relative z-10 text-gray-600 text-xs mt-4">Producción natural · Trazabilidad real</p>
+      <p className="relative z-10 text-gray-500 text-xs">Producción natural · Trazabilidad real</p>
 
-      {/* ── Modal de acceso al Panel de Control ── */}
+      {/* Modal Panel de Control */}
       {showLogin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
           style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(6px)' }}>
           <div className="w-full max-w-sm rounded-2xl p-6 shadow-2xl"
             style={{ background: '#1a0d2e', border: '1px solid #6a2aaf' }}>
-
-            {/* Header modal */}
             <div className="flex items-center justify-between mb-6">
               <div className="flex items-center gap-2">
                 <LayoutDashboard size={20} className="text-purple-400" />
                 <h2 className="text-white font-bold text-lg">Panel de Control</h2>
               </div>
-              <button onClick={() => setShowLogin(false)}
-                className="text-gray-500 hover:text-white transition-colors">
+              <button onClick={() => setShowLogin(false)} className="text-gray-500 hover:text-white">
                 <X size={18} />
               </button>
             </div>
-
             <p className="text-gray-400 text-sm mb-5">Ingresa tus credenciales para continuar</p>
-
             <form onSubmit={loginPanel} className="flex flex-col gap-4">
-              {/* Email */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-gray-400 flex items-center gap-1.5">
-                  <Mail size={11} /> Correo electrónico
-                </label>
-                <input
-                  type="text"
-                  inputMode="email"
-                  autoComplete="off"
-                  autoCorrect="off"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  placeholder="usuario@empresa.com"
-                  value={panelEmail}
-                  onChange={e => {
-                    const limpio = e.target.value.normalize('NFD').replace(/[̀-ͯ]/g, '')
-                    setPanelEmail(limpio)
-                  }}
-                  required
-                  className="bg-gray-900 border border-gray-700 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-purple-500 transition-colors"
-                />
+                <label className="text-xs text-gray-400 flex items-center gap-1.5"><Mail size={11} /> Correo electrónico</label>
+                <input type="text" inputMode="email" autoComplete="off" autoCorrect="off" autoCapitalize="none" spellCheck={false}
+                  placeholder="usuario@empresa.com" value={panelEmail} required
+                  onChange={e => setPanelEmail(e.target.value.normalize('NFD').replace(/[̀-ͯ]/g, ''))}
+                  className="bg-gray-900 border border-gray-700 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-purple-500" />
               </div>
-
-              {/* Contraseña */}
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-gray-400 flex items-center gap-1.5">
-                  <Lock size={11} /> Contraseña
-                </label>
-                <input
-                  type="password"
-                  autoComplete="current-password"
-                  placeholder="••••••••"
-                  value={panelPass}
+                <label className="text-xs text-gray-400 flex items-center gap-1.5"><Lock size={11} /> Contraseña</label>
+                <input type="password" autoComplete="current-password" placeholder="••••••••" value={panelPass} required
                   onChange={e => setPanelPass(e.target.value)}
-                  required
-                  className="bg-gray-900 border border-gray-700 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-purple-500 transition-colors"
-                />
+                  className="bg-gray-900 border border-gray-700 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-purple-500" />
               </div>
-
-              {/* Error */}
-              {panelError && (
-                <p className="text-red-400 text-sm text-center">{panelError}</p>
-              )}
-
-              {/* Submit */}
+              {panelError && <p className="text-red-400 text-sm text-center">{panelError}</p>}
               <button type="submit" disabled={panelLoading}
                 className="w-full flex items-center justify-center gap-2 text-white font-semibold rounded-xl px-6 py-3 text-sm transition-all hover:scale-[1.02] disabled:opacity-60 mt-1"
                 style={{ background: 'linear-gradient(135deg, #5a1aaf, #7a2ad0)', border: '1px solid #9a4aef' }}>
