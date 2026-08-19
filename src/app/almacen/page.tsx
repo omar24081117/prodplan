@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   Warehouse, Loader2, LogOut, Upload, ClipboardList,
-  BarChart3, Package, TrendingUp, ArrowRight, Shield
+  BarChart3, Package, TrendingUp, ArrowRight, Shield, Clock
 } from 'lucide-react'
 
 type Usuario = { cedula: string; nombre: string; rol: string }
@@ -223,6 +223,16 @@ export default function AlmacenPage() {
       bg:    'linear-gradient(135deg,#001a12,#002a1c)',
       border:'rgba(16,185,129,0.25)',
       tag:   'ANALIZAR',
+    },
+    {
+      title: 'Horas Extra',
+      desc:  'Control de horas extra del personal de almacén',
+      icon:  <Clock size={28} strokeWidth={1.5} />,
+      href:  '/almacen/horas-extra',
+      accent:'#a855f7',
+      bg:    'linear-gradient(135deg,#150a25,#1e1035)',
+      border:'rgba(168,85,247,0.25)',
+      tag:   'TURNOS',
     },
   ]
 

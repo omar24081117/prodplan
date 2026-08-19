@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { FileBarChart2, Loader2, Clock, CheckCircle2, XCircle } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { FileBarChart2, BarChart2, Loader2, Clock, CheckCircle2, XCircle } from 'lucide-react'
 
 type Override = {
   hora_ingreso: string
@@ -54,6 +55,7 @@ function calcConOverride(r: Registro, ov: Override) {
 }
 
 export default function RRHHHorasExtraPage() {
+  const router = useRouter()
   const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
   const [fecha, setFecha]       = useState(hoy)
   const [registros, setRegistros] = useState<Registro[]>([])
@@ -61,10 +63,11 @@ export default function RRHHHorasExtraPage() {
   const [loading, setLoading]   = useState(true)
 
   // Export modal
-  const [modalExp,    setModalExp]    = useState(false)
-  const [expDesde,    setExpDesde]    = useState(hoy.slice(0, 7) + '-01')
-  const [expHasta,    setExpHasta]    = useState(hoy)
-  const [descargando, setDescargando] = useState(false)
+  const [modalExp,      setModalExp]      = useState(false)
+  const [expDesde,      setExpDesde]      = useState(hoy.slice(0, 7) + '-01')
+  const [expHasta,      setExpHasta]      = useState(hoy)
+  const [descargando,   setDescargando]   = useState(false)
+  const [descargandoT,  setDescargandoT]  = useState(false)
 
   const cargar = useCallback(async (f: string) => {
     setLoading(true)
@@ -103,21 +106,22 @@ export default function RRHHHorasExtraPage() {
     return { ...r, hora_ingreso: ov.hora_ingreso, salida_efectiva: ov.salida_efectiva, ...calc }
   })
 
-  async function descargarReporte() {
-    setDescargando(true)
+  async function descargarReporte(contrato: 'Fijo' | 'Temporal') {
+    const setLoad = contrato === 'Fijo' ? setDescargando : setDescargandoT
+    setLoad(true)
     try {
-      const res = await fetch(`/api/horas-extra/reporte?fecha_inicio=${expDesde}&fecha_fin=${expHasta}&contrato=Fijo`)
+      const res = await fetch(`/api/horas-extra/reporte?fecha_inicio=${expDesde}&fecha_fin=${expHasta}&contrato=${contrato}`)
       if (!res.ok) { alert('Error al generar reporte'); return }
       const blob = await res.blob()
       const url  = URL.createObjectURL(blob)
       const a    = document.createElement('a')
       a.href     = url
-      a.download = `horas-extra_${expDesde}_${expHasta}.xlsx`
+      a.download = `horas-extra-${contrato.toLowerCase()}_${expDesde}_${expHasta}.xlsx`
       a.click()
       URL.revokeObjectURL(url)
       setModalExp(false)
     } finally {
-      setDescargando(false)
+      setLoad(false)
     }
   }
 
@@ -135,6 +139,11 @@ export default function RRHHHorasExtraPage() {
           <p className="text-gray-500 text-xs mt-0.5">Vista de solo lectura — sin modificaciones</p>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={() => router.push('/rrhh/horas-extra/informe')}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110"
+            style={{ background: 'linear-gradient(135deg,#0c4a6e,#0369a1)', border: '1px solid #38bdf8' }}>
+            <BarChart2 size={14} /> Informe
+          </button>
           <button onClick={() => setModalExp(true)}
             className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110"
             style={{ background: 'linear-gradient(135deg,#14532d,#166534)', border: '1px solid #4ade80' }}>
@@ -284,16 +293,23 @@ export default function RRHHHorasExtraPage() {
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none" />
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2">
+              <button onClick={() => descargarReporte('Fijo')} disabled={descargando || descargandoT}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-all hover:brightness-110"
+                style={{ background: 'linear-gradient(135deg,#14532d,#166534)', border: '1px solid #4ade80' }}>
+                <FileBarChart2 size={14} />
+                {descargando ? 'Descargando...' : 'Personal Fijo'}
+              </button>
+              <button onClick={() => descargarReporte('Temporal')} disabled={descargando || descargandoT}
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-all hover:brightness-110"
+                style={{ background: 'linear-gradient(135deg,#1e3a5c,#1e4d7a)', border: '1px solid #3a8abf' }}>
+                <FileBarChart2 size={14} />
+                {descargandoT ? 'Descargando...' : 'Personal Temporal'}
+              </button>
               <button onClick={() => setModalExp(false)}
-                className="flex-1 py-2.5 rounded-xl text-sm text-gray-400 hover:text-white transition-all"
+                className="w-full py-2 rounded-xl text-sm text-gray-500 hover:text-white transition-all"
                 style={{ background: '#1f2937', border: '1px solid #374151' }}>
                 Cancelar
-              </button>
-              <button onClick={descargarReporte} disabled={descargando}
-                className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-all"
-                style={{ background: 'linear-gradient(135deg,#14532d,#166534)' }}>
-                {descargando ? 'Descargando...' : 'Descargar'}
               </button>
             </div>
           </div>

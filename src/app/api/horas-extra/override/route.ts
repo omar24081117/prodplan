@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export const dynamic = 'force-dynamic'
 
@@ -40,7 +41,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'cedula y fecha requeridos' }, { status: 400 })
   }
 
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   const { data, error } = await supabase
     .from('horas_extra_overrides')
     .upsert({
@@ -70,7 +71,7 @@ export async function DELETE(request: NextRequest) {
   const fecha  = searchParams.get('fecha')
   if (!cedula || !fecha) return NextResponse.json({ error: 'cedula y fecha requeridos' }, { status: 400 })
 
-  const supabase = await createClient()
+  const supabase = createAdminClient()
   const { error } = await supabase
     .from('horas_extra_overrides')
     .delete()

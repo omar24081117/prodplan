@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
   const supabase = await createClient()
 
   // Roles que participan en horas extra
-  const ROLES_VALIDOS = ['Operario', 'Supervisor']
+  const ROLES_VALIDOS = ['Operario', 'Supervisor', 'Almacenista']
 
   // Mapa de rol y tipo_contrato por cédula (solo roles válidos)
   const { data: personal } = await supabase

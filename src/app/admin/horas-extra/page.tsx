@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { Clock, CheckCircle2, Loader2, AlertTriangle, X, Settings, XCircle, Download, UserX, FileBarChart2 } from 'lucide-react'
 
 const TIPOS_AUSENTISMO = [
@@ -514,6 +515,7 @@ function RechazoModal({
 
 /* ── Page ── */
 export default function HorasExtraPage() {
+  const router = useRouter()
   const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
   const [fecha, setFecha]             = useState(hoy)
   const [registros, setRegistros]     = useState<Registro[]>([])
@@ -754,6 +756,11 @@ export default function HorasExtraPage() {
           <p className="text-gray-500 text-sm mt-0.5">Horas extra, recargos nocturnos y ausentismos del personal fijo</p>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={() => router.push('/admin/horas-extra/informe')}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110"
+            style={{ background: 'linear-gradient(135deg,#0c4a6e,#0369a1)', border: '1px solid #38bdf8' }}>
+            <FileBarChart2 size={14} /> Informe
+          </button>
           <button onClick={() => setModalExport(true)}
             className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110"
             style={{ background: 'linear-gradient(135deg,#14532d,#166534)', border: '1px solid #4ade80' }}>
