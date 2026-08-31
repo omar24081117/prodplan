@@ -405,6 +405,7 @@ export default function DespachosPage() {
   const [importing, setImporting] = useState(false)
   const [showForm, setShowForm]   = useState(false)
   const [deleting, setDeleting]   = useState<string | null>(null)
+  const [revertId, setRevertId]   = useState<string | null>(null)
 
   // Filters
   const [filtroEstado, setFiltroEstado] = useState<'' | 'PENDIENTE' | 'VENCIDO' | 'DESPACHADO'>('')
@@ -585,6 +586,16 @@ export default function DespachosPage() {
     await fetch(`/api/despachos/${id}`, { method: 'DELETE' })
     setPedidos(prev => prev.filter(p => p.id !== id))
     setDeleting(null)
+  }
+
+  async function revertirPendiente(id: string) {
+    await fetch(`/api/despachos/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fecha_despacho: null, entrega_tipo: null })
+    })
+    setPedidos(prev => prev.map(p => p.id === id ? { ...p, fecha_despacho: null, entrega_tipo: null } : p))
+    setRevertId(null)
   }
 
   /* ── Excel import ─────────────────────────────────────────────────────── */
@@ -1510,21 +1521,47 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
                         />
                       </td>
 
-                      {/* DELETE — solo Director */}
+                      {/* ACCIONES — Revertir + Eliminar */}
                       <td className="px-3 py-2 whitespace-nowrap">
-                        {esDirector && (
-                          deleting === p.id ? (
-                            <Loader2 size={14} className="animate-spin text-red-400" />
-                          ) : (
-                            <button
-                              onClick={() => eliminar(p.id, p.cliente)}
-                              className="p-1 rounded text-gray-600 hover:text-red-400 hover:bg-red-900/20 transition-colors"
-                              title="Eliminar pedido"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          )
-                        )}
+                        <div className="flex items-center gap-1">
+                          {/* Revertir a Pendiente — solo cuando DESPACHADO y puedeEditar */}
+                          {puedeEditar && estado === 'DESPACHADO' && (
+                            revertId === p.id ? (
+                              <div className="flex items-center gap-1 bg-orange-950/60 border border-orange-700/50 rounded px-1.5 py-0.5">
+                                <span className="text-orange-300 text-xs">¿Revertir?</span>
+                                <button
+                                  onClick={() => revertirPendiente(p.id)}
+                                  className="text-xs text-orange-200 font-semibold hover:text-white px-1"
+                                >Sí</button>
+                                <button
+                                  onClick={() => setRevertId(null)}
+                                  className="text-xs text-gray-500 hover:text-gray-300 px-0.5"
+                                >✕</button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setRevertId(p.id)}
+                                className="p-1 rounded text-gray-600 hover:text-orange-400 hover:bg-orange-900/20 transition-colors"
+                                title="Revertir a Pendiente (quita fecha de despacho)"
+                              >
+                                <ArrowLeft size={14} />
+                              </button>
+                            )
+                          )}
+                          {esDirector && (
+                            deleting === p.id ? (
+                              <Loader2 size={14} className="animate-spin text-red-400" />
+                            ) : (
+                              <button
+                                onClick={() => eliminar(p.id, p.cliente)}
+                                className="p-1 rounded text-gray-600 hover:text-red-400 hover:bg-red-900/20 transition-colors"
+                                title="Eliminar pedido"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )
+                          )}
+                        </div>
                       </td>
                     </tr>
                   )

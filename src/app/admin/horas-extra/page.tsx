@@ -128,6 +128,7 @@ function TurnoManualModal({
 }) {
   const tieneManual = ((overrideActual?.horas_extra_manual ?? 0) > 0) || ((overrideActual?.horas_nocturnas_manual ?? 0) > 0)
   const [modo,            setModo]            = useState<'horario' | 'adicional'>(tieneManual ? 'adicional' : 'horario')
+  const [confirmarQuitar, setConfirmarQuitar] = useState(false)
   const [horaIngreso,     setHoraIngreso]     = useState(overrideActual?.hora_ingreso    ?? registro.hora_ingreso    ?? '')
   const [salidaEfec,      setSalidaEfec]      = useState(overrideActual?.salida_efectiva ?? registro.salida_efectiva ?? registro.hora_salida ?? '')
   const [hsExtManual,     setHsExtManual]     = useState(overrideActual?.horas_extra_manual?.toString()     ?? '')
@@ -201,6 +202,47 @@ function TurnoManualModal({
             {registro.salida_norm && <span className="text-gray-500">S. norm: <span className="text-green-400">{registro.salida_norm}</span></span>}
           </div>
         </div>
+
+        {/* Quitar horas extra */}
+        {(registro.minutos_extra > 0 || overrideActual) && !confirmarQuitar && (
+          <button type="button"
+            onClick={() => setConfirmarQuitar(true)}
+            className="w-full mb-4 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all hover:brightness-110"
+            style={{ background: 'rgba(127,29,29,0.4)', border: '1px solid #991b1b', color: '#f87171' }}>
+            <X size={12} /> Quitar horas extra calculadas
+          </button>
+        )}
+        {confirmarQuitar && (
+          <div className="mb-4 p-3 rounded-lg" style={{ background: 'rgba(127,29,29,0.25)', border: '1px solid #991b1b' }}>
+            <p className="text-red-300 text-xs font-semibold mb-2 flex items-center gap-1.5">
+              <AlertTriangle size={12} /> ¿Eliminar las horas extra de <span className="text-white">{registro.nombre}</span>?
+            </p>
+            <p className="text-gray-500 text-xs mb-3">Se guardará un override con 0 horas. Puede deshacerse volviendo a Config.</p>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setConfirmarQuitar(false)}
+                className="flex-1 py-1.5 rounded-lg text-xs text-gray-400 hover:text-white transition-colors"
+                style={{ background: '#1f2937', border: '1px solid #374151' }}>
+                Cancelar
+              </button>
+              <button type="button"
+                onClick={() => {
+                  onGuardar(registro.cedula, {
+                    hora_ingreso: registro.hora_ingreso ?? '',
+                    salida_efectiva: '',
+                    horas_extra_manual: 0,
+                    horas_nocturnas_manual: 0,
+                    recargo_nocturno_manual: 0,
+                    recargo_diurno_manual: 0,
+                  })
+                  onClose()
+                }}
+                className="flex-1 py-1.5 rounded-lg text-xs font-bold text-white flex items-center justify-center gap-1 transition-all hover:brightness-110"
+                style={{ background: 'linear-gradient(135deg,#7f1d1d,#991b1b)', border: '1px solid #f87171' }}>
+                <X size={11} /> Sí, quitar horas
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Selector de modo */}
         <div className="flex gap-2 mb-4">
