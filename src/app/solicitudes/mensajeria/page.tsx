@@ -155,28 +155,20 @@ export default function MensajeriaPage() {
           <h1 className="text-xl font-bold text-white flex items-center gap-2">
             <Send size={20} className="text-purple-400" /> Mensajería
           </h1>
-          <div className="ml-auto flex items-center gap-2">
-            {!gestor ? (
-              <button onClick={() => setModalGestion(true)}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-all"
+          {gestor && (
+            <div className="ml-auto flex items-center gap-2">
+              <span className="text-xs text-purple-400 font-medium">{gestor.nombre}</span>
+              <button onClick={() => setGestor(null)} className="text-xs text-gray-600 hover:text-gray-400 px-2 py-1 rounded"
                 style={{ background: '#1f2937', border: '1px solid #374151' }}>
-                <Lock size={13} /> Gestión
+                Salir
               </button>
-            ) : (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-purple-400 font-medium">{gestor.nombre}</span>
-                <button onClick={() => setGestor(null)} className="text-xs text-gray-600 hover:text-gray-400 px-2 py-1 rounded"
-                  style={{ background: '#1f2937', border: '1px solid #374151' }}>
-                  Salir
-                </button>
-              </div>
-            )}
-            <button onClick={() => setModalNueva(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110"
-              style={{ background: 'linear-gradient(135deg, #3b1c5c, #4c2580)', border: '1px solid #9333ea' }}>
-              <Plus size={14} /> Nueva Solicitud
-            </button>
-          </div>
+              <button onClick={() => setModalNueva(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110"
+                style={{ background: 'linear-gradient(135deg, #3b1c5c, #4c2580)', border: '1px solid #9333ea' }}>
+                <Plus size={14} /> Nueva Solicitud
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Gestión mode */}
@@ -334,10 +326,23 @@ export default function MensajeriaPage() {
         )}
 
         {!gestor && (
-          <div className="text-center py-20 text-gray-600">
-            <Send size={52} className="mx-auto mb-4 opacity-15" />
-            <p className="text-sm text-gray-500">Usa <span className="text-white font-semibold">+ Nueva Solicitud</span> para solicitar un envío.</p>
-            <p className="text-xs mt-1 text-gray-700">El seguimiento lo gestiona el responsable de mensajería.</p>
+          <div className="flex flex-col items-center justify-center py-16 gap-6">
+            <Send size={56} className="text-purple-900 opacity-40" />
+            <p className="text-gray-500 text-base font-medium">¿Qué deseas hacer?</p>
+            <div className="flex flex-col sm:flex-row gap-4 w-full max-w-sm">
+              <button onClick={() => setModalNueva(true)}
+                className="flex-1 flex flex-col items-center justify-center gap-3 py-8 px-6 rounded-2xl font-bold text-white text-base transition-all hover:brightness-110 active:scale-95"
+                style={{ background: 'linear-gradient(135deg, #3b1c5c, #4c2580)', border: '1px solid #9333ea' }}>
+                <Plus size={28} className="text-purple-300" />
+                Nueva Solicitud
+              </button>
+              <button onClick={() => setModalGestion(true)}
+                className="flex-1 flex flex-col items-center justify-center gap-3 py-8 px-6 rounded-2xl font-bold text-white text-base transition-all hover:brightness-110 active:scale-95"
+                style={{ background: '#1a2535', border: '1px solid #374151' }}>
+                <Lock size={28} className="text-gray-400" />
+                Gestión
+              </button>
+            </div>
           </div>
         )}
       </div>
