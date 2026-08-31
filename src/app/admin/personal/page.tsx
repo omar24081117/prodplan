@@ -34,7 +34,7 @@ const CONTRATO_COLORS: Record<string, string> = {
   Temporal: 'bg-amber-900/50 text-amber-300',
 }
 
-type Operario = { id: string; cedula: string; nombre: string; activo: boolean; rol: Rol; tipo_contrato: TipoContrato | null }
+type Operario = { id: string; cedula: string; nombre: string; activo: boolean; rol: Rol; rol_secundario: Rol | null; tipo_contrato: TipoContrato | null }
 
 export default function PersonalPage() {
   const [personal, setPersonal]   = useState<Operario[]>([])
@@ -44,8 +44,9 @@ export default function PersonalPage() {
   const [showForm, setShowForm]   = useState(false)
   const [saving, setSaving]       = useState(false)
   const [error, setError]         = useState('')
-  const [editandoRol, setEditandoRol]             = useState<string | null>(null)
-  const [editandoContrato, setEditandoContrato]   = useState<string | null>(null)
+  const [editandoRol, setEditandoRol]               = useState<string | null>(null)
+  const [editandoRolSec, setEditandoRolSec]         = useState<string | null>(null)
+  const [editandoContrato, setEditandoContrato]     = useState<string | null>(null)
   const [filtroContrato, setFiltroContrato]       = useState('')
   const [esDirector, setEsDirector]               = useState(false)
   const [editandoNombre, setEditandoNombre]       = useState<string | null>(null)
@@ -112,6 +113,18 @@ export default function PersonalPage() {
     })
     setPersonal(prev => prev.map(p => p.id === op.id ? { ...p, rol: nuevoRol } : p))
     setEditandoRol(null)
+  }
+
+  async function cambiarRolSecundario(op: Operario, valor: string) {
+    const rolSec = valor === '' ? null : valor as Rol
+    setEditandoRolSec(op.id)
+    await fetch(`/api/personal/${op.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rol_secundario: rolSec }),
+    })
+    setPersonal(prev => prev.map(p => p.id === op.id ? { ...p, rol_secundario: rolSec } : p))
+    setEditandoRolSec(null)
   }
 
   async function cambiarContrato(op: Operario, nuevoTipo: TipoContrato) {
@@ -299,6 +312,7 @@ export default function PersonalPage() {
                 <th className="text-left text-gray-400 px-4 py-2.5 font-medium">Cédula</th>
                 <th className="text-left text-gray-400 px-4 py-2.5 font-medium">Nombre</th>
                 <th className="text-left text-gray-400 px-4 py-2.5 font-medium">Rol</th>
+                <th className="text-left text-gray-400 px-4 py-2.5 font-medium">Rol 2</th>
                 <th className="text-left text-gray-400 px-4 py-2.5 font-medium">Contrato</th>
                 <th className="text-left text-gray-400 px-4 py-2.5 font-medium">Estado</th>
                 <th className="px-4 py-2.5"></th>
@@ -351,6 +365,21 @@ export default function PersonalPage() {
                     {editandoRol === p.id && (
                       <span className="ml-1 text-[10px] text-gray-500">...</span>
                     )}
+                  </td>
+
+                  {/* Rol secundario editable inline */}
+                  <td className="px-4 py-2.5">
+                    <select
+                      value={p.rol_secundario ?? ''}
+                      onChange={e => cambiarRolSecundario(p, e.target.value)}
+                      disabled={editandoRolSec === p.id}
+                      className={`text-xs font-semibold px-2 py-1 rounded border-0 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500 ${p.rol_secundario ? ROL_COLORS[p.rol_secundario] : 'text-gray-600'}`}
+                      style={{ background: 'transparent' }}
+                    >
+                      <option value="" className="bg-gray-800 text-gray-400">— sin rol 2 —</option>
+                      {ROLES.map(r => <option key={r} value={r} className="bg-gray-800 text-white">{r}</option>)}
+                    </select>
+                    {editandoRolSec === p.id && <span className="ml-1 text-[10px] text-gray-500">...</span>}
                   </td>
 
                   {/* Contrato editable inline */}
