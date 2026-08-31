@@ -7,6 +7,7 @@ import {
   BarChart2, Calendar, ListChecks, RefreshCw, Construction, Trash2, MessageSquare, Download, Truck, Plus
 } from 'lucide-react'
 import * as XLSX from 'xlsx'
+import { createClient } from '@/lib/supabase/client'
 
 /* ──────────────────────────────────────────────────────────────────────────
    Types
@@ -583,6 +584,41 @@ export default function PlaneacionPage() {
   useEffect(() => {
     if (tab === 3) setMesFiltro(getMonthLabel(toISO(new Date())))
   }, [tab]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  /* ── Supabase Realtime — actualización en tiempo real ─────────────────── */
+  useEffect(() => {
+    const supabase = createClient()
+    // Throttle: evita múltiples recargas si llegan varios cambios juntos
+    let timerPlan: ReturnType<typeof setTimeout> | null = null
+    let timerInv:  ReturnType<typeof setTimeout> | null = null
+    let timerDesp: ReturnType<typeof setTimeout> | null = null
+    let timerDem:  ReturnType<typeof setTimeout> | null = null
+
+    const channel = supabase
+      .channel('planeacion-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'plan_semanal' }, () => {
+        if (timerPlan) clearTimeout(timerPlan)
+        timerPlan = setTimeout(() => cargarPlan(), 500)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'inventario_pt' }, () => {
+        if (timerInv) clearTimeout(timerInv)
+        timerInv = setTimeout(() => cargarInventario(), 500)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'despachos_almacen' }, () => {
+        if (timerDesp) clearTimeout(timerDesp)
+        timerDesp = setTimeout(() => { cargarDespachos(); cargarDemanda() }, 500)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'plan_demanda_diaria' }, () => {
+        if (timerDem) clearTimeout(timerDem)
+        timerDem = setTimeout(() => cargarDemanda(), 500)
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'plan_diario' }, () => {
+        if (tab === 2) cargarPlanDiario(semDiario)
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [cargarPlan, cargarInventario, cargarDespachos, tab, semDiario]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Helpers semana diario
   function getDias(mondayISO: string): string[] {
