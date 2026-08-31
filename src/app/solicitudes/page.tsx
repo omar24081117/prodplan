@@ -1,19 +1,111 @@
 'use client'
 
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { ShoppingCart, Send, ArrowLeft } from 'lucide-react'
+import { ShoppingCart, Send, Lock, X, Loader2 } from 'lucide-react'
+
+type SolicitudesUser = { nombre: string; rol: string }
 
 export default function SolicitudesPage() {
   const router = useRouter()
 
+  const [usuario,      setUsuario]      = useState<SolicitudesUser | null>(null)
+  const [cedulaInput,  setCedulaInput]  = useState('')
+  const [error,        setError]        = useState('')
+  const [loading,      setLoading]      = useState(false)
+  const [checking,     setChecking]     = useState(true)
+
+  // Restaurar sesión guardada en localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('solicitudes_user')
+      if (saved) setUsuario(JSON.parse(saved))
+    } catch {}
+    setChecking(false)
+  }, [])
+
+  async function ingresar(e: React.FormEvent) {
+    e.preventDefault()
+    setLoading(true); setError('')
+    try {
+      const res  = await fetch(`/api/solicitudes/auth?cedula=${encodeURIComponent(cedulaInput.trim())}`)
+      const data = await res.json()
+      if (!res.ok) { setError(data.error || 'Acceso denegado'); return }
+      const user: SolicitudesUser = { nombre: data.nombre, rol: data.rol }
+      localStorage.setItem('solicitudes_user', JSON.stringify(user))
+      setUsuario(user)
+      setCedulaInput('')
+    } catch { setError('Error de conexión') }
+    finally { setLoading(false) }
+  }
+
+  function salir() {
+    localStorage.removeItem('solicitudes_user')
+    setUsuario(null)
+  }
+
+  if (checking) return null
+
+  if (!usuario) {
+    return (
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+        <div className="w-full max-w-xs rounded-2xl p-8" style={{ background: '#111827', border: '1px solid #1e293b' }}>
+          <div className="flex flex-col items-center mb-6">
+            <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-3"
+              style={{ background: 'linear-gradient(135deg, #0e4f5c, #3b1c5c)', border: '1px solid #374151' }}>
+              <Lock size={20} className="text-white" />
+            </div>
+            <h1 className="text-white font-bold text-lg">Solicitudes</h1>
+            <p className="text-gray-500 text-xs mt-1 text-center">Ingresa tu cédula para acceder</p>
+          </div>
+
+          <form onSubmit={ingresar} className="flex flex-col gap-3">
+            <input
+              type="text"
+              inputMode="numeric"
+              placeholder="Número de cédula"
+              value={cedulaInput}
+              autoFocus
+              onChange={e => { setCedulaInput(e.target.value); setError('') }}
+              className="w-full bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-500 text-center tracking-widest"
+            />
+            {error && (
+              <p className="text-red-400 text-xs text-center px-2">{error}</p>
+            )}
+            <button
+              type="submit"
+              disabled={loading || !cedulaInput.trim()}
+              className="w-full py-3 rounded-xl text-sm font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2 transition-all hover:brightness-110"
+              style={{ background: 'linear-gradient(135deg, #0e4f5c, #0f6674)', border: '1px solid #22b8cc' }}>
+              {loading ? <Loader2 size={15} className="animate-spin" /> : null}
+              Ingresar
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push('/')}
+              className="w-full py-2 text-xs text-gray-600 hover:text-gray-400 transition-colors">
+              ← Volver al inicio
+            </button>
+          </form>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
-        <div className="flex items-center gap-3 mb-8">
-          <button onClick={() => router.push('/')} className="text-gray-500 hover:text-white transition-colors">
-            <ArrowLeft size={18} />
+
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-xl font-bold text-white">Solicitudes</h1>
+            <p className="text-xs text-gray-500 mt-0.5">{usuario.nombre}</p>
+          </div>
+          <button onClick={salir}
+            className="flex items-center gap-1.5 text-xs text-gray-600 hover:text-gray-400 px-3 py-1.5 rounded-lg transition-all"
+            style={{ background: '#1f2937', border: '1px solid #374151' }}>
+            <X size={12} /> Salir
           </button>
-          <h1 className="text-xl font-bold text-white">Solicitudes</h1>
         </div>
 
         <div className="flex flex-col gap-4">

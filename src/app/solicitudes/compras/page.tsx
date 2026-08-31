@@ -39,6 +39,7 @@ const EST = {
 export default function SolicitudesComprasPage() {
   const router = useRouter()
 
+  const [authOk,       setAuthOk]       = useState(false)
   const [gestor,       setGestor]       = useState<{ nombre: string } | null>(null)
   const [solicitudes,  setSolicitudes]  = useState<Solicitud[]>([])
   const [loadingSols,  setLoadingSols]  = useState(false)
@@ -66,6 +67,15 @@ export default function SolicitudesComprasPage() {
 
   const [busqueda,     setBusqueda]     = useState('')
   const [filtroEstado, setFiltroEstado] = useState<'Todos' | 'Pendiente' | 'Aprobada' | 'Rechazada'>('Todos')
+
+  // Verificar sesión del hub
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('solicitudes_user')
+      if (saved) { setAuthOk(true) }
+      else { router.replace('/solicitudes') }
+    } catch { router.replace('/solicitudes') }
+  }, [router])
 
   useEffect(() => {
     fetch('/api/personal')
@@ -144,6 +154,8 @@ export default function SolicitudesComprasPage() {
     const ok2  = filtroEstado === 'Todos' || s.estado === filtroEstado
     return ok1 && ok2
   })
+
+  if (!authOk) return null
 
   return (
     <div className="min-h-screen bg-gray-950 p-4 sm:p-6">
