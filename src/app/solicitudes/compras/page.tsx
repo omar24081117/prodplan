@@ -267,7 +267,7 @@ export default function SolicitudesComprasPage() {
                     style={{ cursor: 'grab' }}
                     onMouseDown={onDragStart} onMouseMove={onDragMove}
                     onMouseUp={onDragEnd} onMouseLeave={onDragEnd}>
-                    <table className="w-full text-sm">
+                    <table className="text-sm" style={{ minWidth: '100%', tableLayout: 'auto' }}>
                       <thead>
                         <tr style={{ background: '#020617', borderBottom: '2px solid #1e293b' }}>
                           {['ID', 'Fecha', 'Solicitante', 'Área', 'Tipo', 'Descripción', 'Cant.', 'Urgencia', 'Estado', 'Acciones'].map(h => (
@@ -297,7 +297,7 @@ export default function SolicitudesComprasPage() {
                                 <td className="px-3 py-2.5 text-white font-medium whitespace-nowrap">{s.solicitante_nombre}</td>
                                 <td className="px-3 py-2.5 text-gray-400 text-xs whitespace-nowrap">{s.area}</td>
                                 <td className="px-3 py-2.5 text-cyan-400 text-xs font-semibold whitespace-nowrap">{s.tipo_solicitud}</td>
-                                <td className="px-3 py-2.5 text-gray-200" style={{ minWidth: 200 }}>
+                                <td className="px-3 py-2.5 text-gray-200" style={{ minWidth: 240, whiteSpace: 'normal', wordBreak: 'break-word' }}>
                                   {s.descripcion}
                                 </td>
                                 <td className="px-3 py-2.5 text-gray-300 whitespace-nowrap">{s.cantidad} {s.unidad}</td>
