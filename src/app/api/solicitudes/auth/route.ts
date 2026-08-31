@@ -38,13 +38,14 @@ export async function POST(req: NextRequest) {
 
     if (!persona) return NextResponse.json({ error: 'Cédula no encontrada' }, { status: 404 })
 
-    const esMensajero = persona.rol === 'Mensajero' || persona.rol_secundario === 'Mensajero'
+    const esMensajero    = persona.rol === 'Mensajero'    || persona.rol_secundario === 'Mensajero'
+    const esAlmacenista  = persona.rol === 'Almacenista'  || persona.rol_secundario === 'Almacenista'
     const cedStr = String(cedula).trim()
 
     const puedeGestionar =
       ROLES_ADMIN.has(persona.rol) ||
       (modulo === 'compras'    && GESTORES_COMPRAS.has(cedStr)) ||
-      (modulo === 'mensajeria' && esMensajero)
+      (modulo === 'mensajeria' && (esMensajero || esAlmacenista))
 
     return NextResponse.json({ nombre: persona.nombre, rol: persona.rol, rol_secundario: persona.rol_secundario, puedeGestionar })
   } catch {

@@ -491,7 +491,7 @@ export default function MensajeriaPage() {
               </div>
               <button onClick={() => { setModalGestion(false); setCedulaInput(''); setErrorGestion('') }} className="text-gray-500 hover:text-white"><X size={16} /></button>
             </div>
-            <p className="text-gray-500 text-xs mb-4">Director · Gerencia · Mensajero</p>
+            <p className="text-gray-500 text-xs mb-4">Director · Gerencia · Mensajero · Almacenista</p>
             <form onSubmit={intentarGestion} className="flex flex-col gap-3">
               <input type="text" inputMode="numeric" placeholder="Ingresa tu cédula"
                 value={cedulaInput} autoFocus onChange={e => setCedulaInput(e.target.value)}
