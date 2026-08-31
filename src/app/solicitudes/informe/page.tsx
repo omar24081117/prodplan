@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, ClipboardList, Clock, CheckCircle2, XCircle, RefreshCw, Loader2, Play, X } from 'lucide-react'
+import { ArrowLeft, ClipboardList, Clock, CheckCircle2, XCircle, RefreshCw, Loader2, Play, X, Bike } from 'lucide-react'
 
 type Estado = 'Pendiente' | 'En Trámite' | 'Finalizada' | 'Rechazada'
 
@@ -17,6 +17,7 @@ type SolicitudMensajeria = {
   destinatario: string; direccion: string; descripcion: string
   urgencia: string; estado: Estado
   observacion: string | null; gestionado_por: string | null; gestionado_en: string | null
+  mensajero_asignado: string | null
 }
 
 const EST: Record<Estado, { bg: string; color: string; border: string }> = {
@@ -55,10 +56,10 @@ const FILTER_INPUT = {
 const FILTER_SELECT = { ...FILTER_INPUT, cursor: 'pointer' }
 
 type FC = { id: string; fecha: string; sol: string; area: string; tipo: string; desc: string; urg: string; est: string }
-type FM = { id: string; fecha: string; sol: string; area: string; dest: string; dir: string; desc: string; urg: string; est: string }
+type FM = { id: string; fecha: string; sol: string; area: string; dest: string; dir: string; desc: string; urg: string; est: string; mens: string }
 
 const FC0: FC = { id: '', fecha: '', sol: '', area: '', tipo: '', desc: '', urg: '', est: '' }
-const FM0: FM = { id: '', fecha: '', sol: '', area: '', dest: '', dir: '', desc: '', urg: '', est: '' }
+const FM0: FM = { id: '', fecha: '', sol: '', area: '', dest: '', dir: '', desc: '', urg: '', est: '', mens: '' }
 
 function match(val: string | number | null | undefined, q: string) {
   if (!q) return true
@@ -144,7 +145,7 @@ export default function InformeSolicitudesPage() {
     match(s.numero, fm.id) && match(s.fecha, fm.fecha) &&
     match(s.solicitante_nombre, fm.sol) && match(s.area, fm.area) &&
     match(s.destinatario, fm.dest) && match(s.direccion, fm.dir) &&
-    match(s.descripcion, fm.desc) &&
+    match(s.descripcion, fm.desc) && match(s.mensajero_asignado, fm.mens) &&
     (!fm.urg || s.urgencia === fm.urg) && (!fm.est || s.estado === fm.est)
   ).sort(sortFn)
 
@@ -343,7 +344,7 @@ export default function InformeSolicitudesPage() {
                 <table className="text-sm" style={{ minWidth: '100%', tableLayout: 'auto' }}>
                   <thead>
                     <tr style={{ background: '#020617', borderBottom: '1px solid #1e293b' }}>
-                      {['ID', 'Fecha', 'Solicitante', 'Área', 'Destinatario', 'Dirección', 'Descripción', 'Urgencia', 'Estado', 'Lo realizado / Gestor'].map(h => (
+                      {['ID', 'Fecha', 'Solicitante', 'Área', 'Destinatario', 'Dirección', 'Descripción', 'Urgencia', 'Mensajero', 'Estado', 'Lo realizado / Gestor'].map(h => (
                         <th key={h} className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide whitespace-nowrap" style={{ color: '#64748b' }}>{h}</th>
                       ))}
                     </tr>
@@ -394,6 +395,11 @@ export default function InformeSolicitudesPage() {
                         </select>
                       </td>
                       <td className="px-2 py-1.5">
+                        <input style={FILTER_INPUT} placeholder="Mensajero" value={fm.mens}
+                          onMouseDown={e => e.stopPropagation()}
+                          onChange={e => setFm(f => ({ ...f, mens: e.target.value }))} />
+                      </td>
+                      <td className="px-2 py-1.5">
                         <select style={FILTER_SELECT} value={fm.est}
                           onMouseDown={e => e.stopPropagation()}
                           onChange={e => setFm(f => ({ ...f, est: e.target.value }))}>
@@ -409,7 +415,7 @@ export default function InformeSolicitudesPage() {
                   </thead>
                   <tbody>
                     {listaMensajeria.length === 0 ? (
-                      <tr><td colSpan={10} className="text-center text-gray-600 py-10 text-sm">Sin resultados</td></tr>
+                      <tr><td colSpan={11} className="text-center text-gray-600 py-10 text-sm">Sin resultados</td></tr>
                     ) : listaMensajeria.map((s, i) => {
                       const dimmed = s.estado === 'Finalizada' || s.estado === 'Rechazada'
                       return (
@@ -427,6 +433,13 @@ export default function InformeSolicitudesPage() {
                             {s.urgencia === 'Urgente'
                               ? <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: '#450a0a', color: '#fca5a5' }}>URGENTE</span>
                               : <span className="text-xs text-gray-600">Normal</span>}
+                          </td>
+                          <td className="px-3 py-2.5 whitespace-nowrap">
+                            {s.mensajero_asignado
+                              ? <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded" style={{ background: '#0d2d2d', color: '#2dd4bf', border: '1px solid #0d9488' }}>
+                                  <Bike size={10} />{s.mensajero_asignado}
+                                </span>
+                              : <span className="text-gray-700 text-xs">—</span>}
                           </td>
                           <td className="px-3 py-2.5"><EstadoBadge estado={s.estado} /></td>
                           <td className="px-3 py-2.5" style={{ minWidth: 160 }}>

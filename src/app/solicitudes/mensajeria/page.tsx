@@ -30,7 +30,7 @@ export default function MensajeriaPage() {
   const router = useRouter()
 
   const [authOk,       setAuthOk]       = useState(false)
-  const [gestor,       setGestor]       = useState<{ nombre: string } | null>(null)
+  const [gestor,       setGestor]       = useState<{ nombre: string; esMensajero: boolean } | null>(null)
   const [solicitudes,  setSolicitudes]  = useState<Solicitud[]>([])
   const [loadingSols,  setLoadingSols]  = useState(false)
   const [personal,     setPersonal]     = useState<string[]>([])
@@ -104,7 +104,8 @@ export default function MensajeriaPage() {
       const data = await res.json()
       if (!res.ok)              { setErrorGestion(data.error || 'Error'); return }
       if (!data.puedeGestionar) { setErrorGestion('No tienes acceso a la gestión de mensajería'); return }
-      setGestor({ nombre: data.nombre })
+      const esMensajero = data.rol === 'Mensajero' || data.rol_secundario === 'Mensajero'
+      setGestor({ nombre: data.nombre, esMensajero })
       setModalGestion(false); setCedulaInput('')
     } catch { setErrorGestion('Error de conexión') }
     finally { setLoadingAuth(false) }
@@ -156,6 +157,7 @@ export default function MensajeriaPage() {
 
   const filtradas = solicitudes
     .filter(s => {
+      if (gestor?.esMensajero && s.mensajero_asignado !== gestor.nombre) return false
       const ok1 = s.descripcion.toLowerCase().includes(busqueda.toLowerCase()) ||
                   s.solicitante_nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
                   s.destinatario.toLowerCase().includes(busqueda.toLowerCase())
@@ -229,7 +231,11 @@ export default function MensajeriaPage() {
           </h1>
           {gestor && (
             <div className="ml-auto flex items-center gap-2">
-              <span className="text-xs text-purple-400 font-medium">{gestor.nombre}</span>
+              <span className="text-xs font-medium flex items-center gap-1.5" style={{ color: gestor.esMensajero ? '#2dd4bf' : '#a78bfa' }}>
+            {gestor.esMensajero && <Bike size={13} />}
+            {gestor.nombre}
+            {gestor.esMensajero && <span className="text-gray-600 font-normal">· mis entregas</span>}
+          </span>
               <button onClick={() => setGestor(null)} className="text-xs text-gray-600 hover:text-gray-400 px-2 py-1 rounded"
                 style={{ background: '#1f2937', border: '1px solid #374151' }}>
                 Salir
