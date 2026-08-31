@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-const GESTORES_COMPRAS    = new Set(['1061795021'])
-const GESTORES_MENSAJERIA = new Set(['1193569479'])
-const ROLES_ADMIN         = new Set(['Director', 'Gerente'])
+const GESTORES_COMPRAS = new Set(['1061795021'])
+const ROLES_ADMIN      = new Set(['Director', 'Gerente', 'Gerencia'])
 
 // GET /api/solicitudes/auth?cedula=XXX  — verifica acceso al módulo (no Operario)
 export async function GET(req: NextRequest) {
@@ -13,15 +12,16 @@ export async function GET(req: NextRequest) {
   const supabase = createAdminClient()
   const { data: persona } = await supabase
     .from('personal')
-    .select('cedula, nombre, rol')
+    .select('cedula, nombre, rol, rol_secundario')
     .eq('cedula', cedula.trim())
     .eq('activo', true)
     .single()
 
   if (!persona) return NextResponse.json({ error: 'Cédula no encontrada o inactiva' }, { status: 404 })
-  if (persona.rol === 'Operario') return NextResponse.json({ error: 'Los operarios no tienen acceso a este módulo' }, { status: 403 })
+  if (persona.rol === 'Operario' && persona.rol_secundario !== 'Mensajero')
+    return NextResponse.json({ error: 'Los operarios no tienen acceso a este módulo' }, { status: 403 })
 
-  return NextResponse.json({ nombre: persona.nombre, rol: persona.rol })
+  return NextResponse.json({ nombre: persona.nombre, rol: persona.rol, rol_secundario: persona.rol_secundario })
 }
 
 export async function POST(req: NextRequest) {
@@ -32,19 +32,21 @@ export async function POST(req: NextRequest) {
     const supabase = createAdminClient()
     const { data: persona } = await supabase
       .from('personal')
-      .select('cedula, nombre, rol')
+      .select('cedula, nombre, rol, rol_secundario')
       .eq('cedula', String(cedula).trim())
       .single()
 
     if (!persona) return NextResponse.json({ error: 'Cédula no encontrada' }, { status: 404 })
 
+    const esMensajero = persona.rol === 'Mensajero' || persona.rol_secundario === 'Mensajero'
     const cedStr = String(cedula).trim()
+
     const puedeGestionar =
       ROLES_ADMIN.has(persona.rol) ||
-      (modulo === 'compras'    && GESTORES_COMPRAS.has(cedStr))    ||
-      (modulo === 'mensajeria' && GESTORES_MENSAJERIA.has(cedStr))
+      (modulo === 'compras'    && GESTORES_COMPRAS.has(cedStr)) ||
+      (modulo === 'mensajeria' && esMensajero)
 
-    return NextResponse.json({ nombre: persona.nombre, rol: persona.rol, puedeGestionar })
+    return NextResponse.json({ nombre: persona.nombre, rol: persona.rol, rol_secundario: persona.rol_secundario, puedeGestionar })
   } catch {
     return NextResponse.json({ error: 'Error interno' }, { status: 500 })
   }

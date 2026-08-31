@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { Send, ArrowLeft, Plus, Clock, CheckCircle2, XCircle, Search, Lock, X, Loader2, Play, Flag } from 'lucide-react'
+import { Send, ArrowLeft, Plus, Clock, CheckCircle2, XCircle, Search, Lock, X, Loader2, Play, Flag, Bike } from 'lucide-react'
 
 type Estado = 'Pendiente' | 'En Trámite' | 'Finalizada' | 'Rechazada'
 
@@ -384,7 +384,7 @@ export default function MensajeriaPage() {
           <div className="flex flex-col items-center justify-center py-16 gap-6">
             <Send size={56} className="text-purple-900 opacity-40" />
             <p className="text-gray-500 text-base font-medium">¿Qué deseas hacer?</p>
-            <div className="flex flex-col sm:flex-row gap-4 w-full max-w-sm">
+            <div className="flex flex-col sm:flex-row gap-4 w-full max-w-2xl">
               <button onClick={() => setModalNueva(true)}
                 className="flex-1 flex flex-col items-center justify-center gap-3 py-8 px-6 rounded-2xl font-bold text-white text-base transition-all hover:brightness-110 active:scale-95"
                 style={{ background: 'linear-gradient(135deg, #3b1c5c, #4c2580)', border: '1px solid #9333ea' }}>
@@ -396,6 +396,12 @@ export default function MensajeriaPage() {
                 style={{ background: '#1a2535', border: '1px solid #374151' }}>
                 <Lock size={28} className="text-gray-400" />
                 Gestión
+              </button>
+              <button onClick={() => setModalGestion(true)}
+                className="flex-1 flex flex-col items-center justify-center gap-3 py-8 px-6 rounded-2xl font-bold text-white text-base transition-all hover:brightness-110 active:scale-95"
+                style={{ background: 'linear-gradient(135deg, #0d2d2d, #0f3f3a)', border: '1px solid #0d9488' }}>
+                <Bike size={28} className="text-teal-400" />
+                Mensajero
               </button>
             </div>
           </div>
@@ -413,7 +419,7 @@ export default function MensajeriaPage() {
               </div>
               <button onClick={() => { setModalGestion(false); setCedulaInput(''); setErrorGestion('') }} className="text-gray-500 hover:text-white"><X size={16} /></button>
             </div>
-            <p className="text-gray-500 text-xs mb-4">Director · Gerencia · Mensajería</p>
+            <p className="text-gray-500 text-xs mb-4">Director · Gerencia · Mensajero</p>
             <form onSubmit={intentarGestion} className="flex flex-col gap-3">
               <input type="text" inputMode="numeric" placeholder="Ingresa tu cédula"
                 value={cedulaInput} autoFocus onChange={e => setCedulaInput(e.target.value)}
