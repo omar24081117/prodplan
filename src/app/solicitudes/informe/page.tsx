@@ -29,6 +29,14 @@ const EST: Record<Estado, { bg: string; color: string; border: string }> = {
 
 const SORT_ORDER: Record<Estado, number> = { Pendiente: 0, 'En Trámite': 1, Rechazada: 2, Finalizada: 3 }
 
+function fmtFecha(iso: string | null) {
+  if (!iso) return null
+  return new Date(iso).toLocaleString('es-CO', {
+    timeZone: 'America/Bogota', day: '2-digit', month: '2-digit',
+    year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+  })
+}
+
 function EstadoBadge({ estado }: { estado: Estado }) {
   const st = EST[estado]
   return (
@@ -320,6 +328,7 @@ export default function InformeSolicitudesPage() {
                           <td className="px-3 py-2.5" style={{ minWidth: 160 }}>
                             {s.observacion && <span className="block text-gray-300 text-xs" style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{s.observacion}</span>}
                             {s.gestionado_por && <span className="block text-gray-600 text-xs mt-0.5">{s.gestionado_por}</span>}
+                            {s.gestionado_en && <span className="block text-gray-700 text-xs mt-0.5 font-mono">{fmtFecha(s.gestionado_en)}</span>}
                             {!s.observacion && !s.gestionado_por && <span className="text-gray-700 text-xs">—</span>}
                           </td>
                         </tr>
@@ -445,6 +454,7 @@ export default function InformeSolicitudesPage() {
                           <td className="px-3 py-2.5" style={{ minWidth: 160 }}>
                             {s.observacion && <span className="block text-gray-300 text-xs" style={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>{s.observacion}</span>}
                             {s.gestionado_por && <span className="block text-gray-600 text-xs mt-0.5">{s.gestionado_por}</span>}
+                            {s.gestionado_en && <span className="block text-gray-700 text-xs mt-0.5 font-mono">{fmtFecha(s.gestionado_en)}</span>}
                             {!s.observacion && !s.gestionado_por && <span className="text-gray-700 text-xs">—</span>}
                           </td>
                         </tr>

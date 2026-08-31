@@ -11,7 +11,7 @@ type Solicitud = {
   solicitante_nombre: string; area: string
   destinatario: string; direccion: string; descripcion: string
   urgencia: 'Normal' | 'Urgente'
-  estado: Estado; observacion: string | null; gestionado_por: string | null
+  estado: Estado; observacion: string | null; gestionado_por: string | null; gestionado_en: string | null
   mensajero_asignado: string | null
 }
 
@@ -23,6 +23,14 @@ const EST: Record<Estado, { bg: string; color: string; border: string }> = {
 }
 
 const SORT_ORDER: Record<Estado, number> = { Pendiente: 0, 'En Trámite': 1, Rechazada: 2, Finalizada: 3 }
+
+function fmtFecha(iso: string | null) {
+  if (!iso) return null
+  return new Date(iso).toLocaleString('es-CO', {
+    timeZone: 'America/Bogota', day: '2-digit', month: '2-digit',
+    year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false,
+  })
+}
 
 type AccionTipo = 'En Trámite' | 'Finalizada' | 'Rechazada'
 
@@ -365,6 +373,7 @@ export default function MensajeriaPage() {
                                     {s.estado}
                                   </span>
                                   {s.gestionado_por && <span className="block text-gray-600 text-xs mt-0.5">{s.gestionado_por}</span>}
+                                  {s.gestionado_en && <span className="block text-gray-700 text-xs mt-0.5 font-mono">{fmtFecha(s.gestionado_en)}</span>}
                                   {s.observacion && <span className="block text-gray-500 text-xs mt-0.5 max-w-[140px] truncate" title={s.observacion}>{s.observacion}</span>}
                                 </td>
                                 <td className="px-3 py-2.5 whitespace-nowrap">
