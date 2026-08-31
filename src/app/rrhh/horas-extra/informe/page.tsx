@@ -17,6 +17,7 @@ type PersonaRow = {
   cedula: string
   nombre: string
   contrato: string
+  rol: string
   hrsExtra: number
   hrsNoc: number
   recargo: number
@@ -71,10 +72,10 @@ export default function RRHHInformeRangoPage() {
   }
 
   function descargarCSV() {
-    const filas: string[] = ['Nombre,Contrato,Cédula,Fecha,HRS+,HRS NOC,REC NOC,REC DIA,Estado,Aprobado por']
+    const filas: string[] = ['Nombre,Rol,Contrato,Cédula,Fecha,HRS+,HRS NOC,REC NOC,REC DIA,Estado,Aprobado por']
     for (const p of personas) {
       for (const d of p.detalle) {
-        filas.push([p.nombre, p.contrato, p.cedula, d.fecha, d.hrsExtra, d.hrsNoc, d.recargo, d.recargoDiurno, d.estado, d.aprobadoPor ?? ''].join(','))
+        filas.push([p.nombre, p.rol, p.contrato, p.cedula, d.fecha, d.hrsExtra, d.hrsNoc, d.recargo, d.recargoDiurno, d.estado, d.aprobadoPor ?? ''].join(','))
       }
     }
     const blob = new Blob([filas.join('\n')], { type: 'text/csv;charset=utf-8;' })
@@ -168,7 +169,7 @@ export default function RRHHInformeRangoPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ background: '#020617', borderBottom: '2px solid #1e293b' }}>
-                    {['', 'Nombre', 'Contrato', 'Cédula', 'Días', 'HRS+', 'HRS NOC', 'REC NOC', 'REC DÍA', 'Apro.', 'Pend.', 'Rech.'].map(h => (
+                    {['', 'Nombre', 'Rol', 'Contrato', 'Cédula', 'Días', 'HRS+', 'HRS NOC', 'REC NOC', 'REC DÍA', 'Apro.', 'Pend.', 'Rech.'].map(h => (
                       <th key={h} className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide" style={{ color: '#64748b' }}>{h}</th>
                     ))}
                   </tr>
@@ -187,6 +188,16 @@ export default function RRHHInformeRangoPage() {
                             {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                           </td>
                           <td className="px-3 py-2.5 text-white font-semibold">{p.nombre}</td>
+                          <td className="px-3 py-2.5">
+                            <span className="px-2 py-0.5 rounded text-xs font-bold"
+                              style={p.rol === 'Almacenista'
+                                ? { background: '#1e3a5f', color: '#60a5fa' }
+                                : p.rol === 'Supervisor'
+                                ? { background: '#3b1c5c', color: '#c084fc' }
+                                : { background: '#1a2a1a', color: '#86efac' }}>
+                              {p.rol}
+                            </span>
+                          </td>
                           <td className="px-3 py-2.5">
                             <span className="px-2 py-0.5 rounded text-xs font-bold"
                               style={p.contrato === 'Temporal'

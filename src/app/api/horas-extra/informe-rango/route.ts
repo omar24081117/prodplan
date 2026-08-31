@@ -26,19 +26,19 @@ export async function GET(req: NextRequest) {
       .select('cedula, fecha, aprobado_por_nombre, rechazado')
       .gte('fecha', desde)
       .lte('fecha', hasta),
-    supabase.from('personal').select('cedula, nombre, tipo_contrato'),
+    supabase.from('personal').select('cedula, nombre, tipo_contrato, rol'),
   ])
 
   if (e1) return NextResponse.json({ error: e1.message }, { status: 500 })
 
-  const nombreMap: Record<string, { nombre: string; contrato: string }> = {}
-  for (const p of personal ?? []) nombreMap[String(p.cedula)] = { nombre: p.nombre, contrato: p.tipo_contrato ?? 'Fijo' }
+  const nombreMap: Record<string, { nombre: string; contrato: string; rol: string }> = {}
+  for (const p of personal ?? []) nombreMap[String(p.cedula)] = { nombre: p.nombre, contrato: p.tipo_contrato ?? 'Fijo', rol: p.rol ?? 'Operario' }
 
   const aproMap: Record<string, { aprobado_por_nombre: string; rechazado: boolean }> = {}
   for (const a of apros ?? []) aproMap[`${a.cedula}_${a.fecha}`] = a
 
   type DetalleRow = { fecha: string; hrsExtra: number; hrsNoc: number; recargo: number; recargoDiurno: number; estado: string; aprobadoPor?: string }
-  type PersonaRow = { cedula: string; nombre: string; contrato: string; hrsExtra: number; hrsNoc: number; recargo: number; recargoDiurno: number; aprobadas: number; pendientes: number; rechazadas: number; detalle: DetalleRow[] }
+  type PersonaRow = { cedula: string; nombre: string; contrato: string; rol: string; hrsExtra: number; hrsNoc: number; recargo: number; recargoDiurno: number; aprobadas: number; pendientes: number; rechazadas: number; detalle: DetalleRow[] }
 
   const personaMap: Record<string, PersonaRow> = {}
 
@@ -59,6 +59,7 @@ export async function GET(req: NextRequest) {
         cedula: key,
         nombre: nombreMap[key]?.nombre ?? ov.configurado_por_nombre ?? key,
         contrato: nombreMap[key]?.contrato ?? 'Fijo',
+        rol: nombreMap[key]?.rol ?? 'Operario',
         hrsExtra: 0, hrsNoc: 0, recargo: 0, recargoDiurno: 0,
         aprobadas: 0, pendientes: 0, rechazadas: 0,
         detalle: [],
