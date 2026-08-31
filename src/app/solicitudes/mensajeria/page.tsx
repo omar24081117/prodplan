@@ -12,6 +12,7 @@ type Solicitud = {
   destinatario: string; direccion: string; descripcion: string
   urgencia: 'Normal' | 'Urgente'
   estado: Estado; observacion: string | null; gestionado_por: string | null
+  mensajero_asignado: string | null
 }
 
 const EST: Record<Estado, { bg: string; color: string; border: string }> = {
@@ -33,6 +34,7 @@ export default function MensajeriaPage() {
   const [solicitudes,  setSolicitudes]  = useState<Solicitud[]>([])
   const [loadingSols,  setLoadingSols]  = useState(false)
   const [personal,     setPersonal]     = useState<string[]>([])
+  const [mensajeros,   setMensajeros]   = useState<string[]>([])
 
   const [modalGestion, setModalGestion] = useState(false)
   const [cedulaInput,  setCedulaInput]  = useState('')
@@ -51,6 +53,7 @@ export default function MensajeriaPage() {
   const [accionId,        setAccionId]        = useState<string | null>(null)
   const [accionTipo,      setAccionTipo]      = useState<AccionTipo | null>(null)
   const [accionObs,       setAccionObs]       = useState('')
+  const [accionMensajero, setAccionMensajero] = useState('')
   const [savingAccion,    setSavingAccion]    = useState(false)
   const [solicitudCreada, setSolicitudCreada] = useState<{ numero: number; descripcion: string } | null>(null)
 
@@ -67,8 +70,15 @@ export default function MensajeriaPage() {
 
   useEffect(() => {
     fetch('/api/personal').then(r => r.json()).then(data => {
-      if (Array.isArray(data))
-        setPersonal((data as { nombre: string; activo: boolean }[]).filter(p => p.activo).map(p => p.nombre).sort())
+      if (!Array.isArray(data)) return
+      const activos = data as { nombre: string; activo: boolean; rol: string; rol_secundario: string | null }[]
+      setPersonal(activos.filter(p => p.activo).map(p => p.nombre).sort())
+      setMensajeros(
+        activos
+          .filter(p => p.activo && (p.rol === 'Mensajero' || p.rol_secundario === 'Mensajero'))
+          .map(p => p.nombre)
+          .sort()
+      )
     }).catch(() => {})
   }, [])
 
@@ -125,11 +135,21 @@ export default function MensajeriaPage() {
     if (!accionId || !accionTipo || !gestor) return
     setSavingAccion(true)
     try {
+      const payload: Record<string, string | null> = {
+        estado: accionTipo,
+        observacion: accionObs,
+        gestionado_por: gestor.nombre,
+      }
+      if (accionTipo === 'En Trámite' && accionMensajero)
+        payload.mensajero_asignado = accionMensajero
       const res = await fetch(`/api/solicitudes/mensajeria/${accionId}`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ estado: accionTipo, observacion: accionObs, gestionado_por: gestor.nombre }),
+        body: JSON.stringify(payload),
       })
-      if (res.ok) { setAccionId(null); setAccionTipo(null); setAccionObs(''); cargarSolicitudes() }
+      if (res.ok) {
+        setAccionId(null); setAccionTipo(null); setAccionObs(''); setAccionMensajero('')
+        cargarSolicitudes()
+      }
     } catch {}
     finally { setSavingAccion(false) }
   }
@@ -265,7 +285,7 @@ export default function MensajeriaPage() {
                     <table className="text-sm" style={{ minWidth: '100%', tableLayout: 'auto' }}>
                       <thead>
                         <tr style={{ background: '#020617', borderBottom: '2px solid #1e293b' }}>
-                          {['ID', 'Fecha', 'Solicitante', 'Área', 'Destinatario', 'Dirección', 'Descripción', 'Urgencia', 'Estado', 'Acciones'].map(h => (
+                          {['ID', 'Fecha', 'Solicitante', 'Área', 'Destinatario', 'Dirección', 'Descripción', 'Urgencia', 'Mensajero', 'Estado', 'Acciones'].map(h => (
                             <th key={h} className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide whitespace-nowrap" style={{ color: '#64748b' }}>{h}</th>
                           ))}
                         </tr>
@@ -303,6 +323,13 @@ export default function MensajeriaPage() {
                                     ? <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: '#450a0a', color: '#fca5a5' }}>URGENTE</span>
                                     : <span className="text-xs text-gray-600">Normal</span>}
                                 </td>
+                                <td className="px-3 py-2.5 whitespace-nowrap">
+                                  {s.mensajero_asignado
+                                    ? <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded" style={{ background: '#0d2d2d', color: '#2dd4bf', border: '1px solid #0d9488' }}>
+                                        <Bike size={10} />{s.mensajero_asignado}
+                                      </span>
+                                    : <span className="text-gray-700 text-xs">—</span>}
+                                </td>
                                 <td className="px-3 py-2.5">
                                   <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded whitespace-nowrap"
                                     style={{ background: st.bg, color: st.color }}>
@@ -318,12 +345,12 @@ export default function MensajeriaPage() {
                                 <td className="px-3 py-2.5 whitespace-nowrap">
                                   {s.estado === 'Pendiente' && (
                                     <div className="flex gap-1">
-                                      <button onClick={() => { setAccionId(s.id); setAccionTipo('En Trámite'); setAccionObs('') }}
+                                      <button onClick={() => { setAccionId(s.id); setAccionTipo('En Trámite'); setAccionObs(''); setAccionMensajero(s.mensajero_asignado ?? '') }}
                                         className="px-2 py-1 rounded text-xs font-bold transition-all hover:brightness-110"
                                         style={{ background: '#0c1a3d', color: '#60a5fa', border: '1px solid #1e3a8a' }}>
                                         Iniciar
                                       </button>
-                                      <button onClick={() => { setAccionId(s.id); setAccionTipo('Rechazada'); setAccionObs('') }}
+                                      <button onClick={() => { setAccionId(s.id); setAccionTipo('Rechazada'); setAccionObs(''); setAccionMensajero('') }}
                                         className="px-2 py-1 rounded text-xs font-bold transition-all hover:brightness-110"
                                         style={{ background: '#1a0505', color: '#f87171', border: '1px solid #7f1d1d' }}>
                                         Rechazar
@@ -331,7 +358,7 @@ export default function MensajeriaPage() {
                                     </div>
                                   )}
                                   {s.estado === 'En Trámite' && (
-                                    <button onClick={() => { setAccionId(s.id); setAccionTipo('Finalizada'); setAccionObs('') }}
+                                    <button onClick={() => { setAccionId(s.id); setAccionTipo('Finalizada'); setAccionObs(''); setAccionMensajero('') }}
                                       className="px-2 py-1 rounded text-xs font-bold transition-all hover:brightness-110 flex items-center gap-1"
                                       style={{ background: '#052e16', color: '#4ade80', border: '1px solid #166534' }}>
                                       <Flag size={10} /> Finalizar
@@ -341,14 +368,25 @@ export default function MensajeriaPage() {
                               </tr>
                               {isAccion && (
                                 <tr key={`${s.id}-acc`} style={{ background: '#080d08', borderBottom: '2px solid #1e293b' }}>
-                                  <td colSpan={10} className="px-4 py-3">
+                                  <td colSpan={11} className="px-4 py-3">
                                     <div className="flex items-start gap-3 flex-wrap">
                                       <span className="text-xs font-bold mt-1.5 whitespace-nowrap"
                                         style={{ color: accionTipo === 'Finalizada' ? '#4ade80' : accionTipo === 'En Trámite' ? '#60a5fa' : '#f87171' }}>
                                         {accionTipo === 'En Trámite' ? '▶ Iniciar trámite' : accionTipo === 'Finalizada' ? '✓ Finalizar envío' : '✕ Rechazar envío'}
                                       </span>
+                                      {accionTipo === 'En Trámite' && (
+                                        <div className="min-w-[180px]">
+                                          <select
+                                            value={accionMensajero}
+                                            onChange={e => setAccionMensajero(e.target.value)}
+                                            className="w-full bg-gray-900 border border-teal-800 text-white rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-teal-500 cursor-pointer">
+                                            <option value="">— Asignar mensajero —</option>
+                                            {mensajeros.map(m => <option key={m} value={m}>{m}</option>)}
+                                          </select>
+                                        </div>
+                                      )}
                                       <div className="flex-1 min-w-[200px]">
-                                        <input type="text" autoFocus
+                                        <input type="text" autoFocus={accionTipo !== 'En Trámite'}
                                           placeholder={accionTipo === 'Finalizada' ? 'Descripción de lo realizado (obligatorio)' : 'Descripción de la acción (opcional)'}
                                           value={accionObs}
                                           onChange={e => setAccionObs(e.target.value)}
@@ -361,7 +399,7 @@ export default function MensajeriaPage() {
                                         {savingAccion && <Loader2 size={12} className="animate-spin" />}
                                         Confirmar
                                       </button>
-                                      <button onClick={() => { setAccionId(null); setAccionTipo(null) }} className="text-gray-600 hover:text-gray-400 mt-1">
+                                      <button onClick={() => { setAccionId(null); setAccionTipo(null); setAccionMensajero('') }} className="text-gray-600 hover:text-gray-400 mt-1">
                                         <X size={14} />
                                       </button>
                                     </div>
