@@ -59,7 +59,7 @@ export default function SolicitudesComprasPage() {
   const [accionTipo,      setAccionTipo]      = useState<AccionTipo | null>(null)
   const [accionObs,       setAccionObs]       = useState('')
   const [savingAccion,    setSavingAccion]    = useState(false)
-  const [solicitudCreada, setSolicitudCreada] = useState<number | null>(null)
+  const [solicitudCreada, setSolicitudCreada] = useState<{ numero: number; descripcion: string } | null>(null)
 
   const [busqueda,     setBusqueda]     = useState('')
   const [filtroEstado, setFiltroEstado] = useState<'Todos' | Estado>('Todos')
@@ -120,8 +120,8 @@ export default function SolicitudesComprasPage() {
       setModalNueva(false)
       setForm({ solicitante_nombre: '', area: '', tipo_solicitud: '', descripcion: '', cantidad: '', unidad: '', urgencia: 'Normal' })
       if (data.numero) {
-        setSolicitudCreada(data.numero)
-        setTimeout(() => setSolicitudCreada(null), 6000)
+        setSolicitudCreada({ numero: data.numero, descripcion: form.descripcion })
+        setTimeout(() => setSolicitudCreada(null), 8000)
       }
       if (gestor) cargarSolicitudes()
     } catch { setErrorForm('Error de conexión') }
@@ -156,18 +156,29 @@ export default function SolicitudesComprasPage() {
   return (
     <div className="min-h-screen bg-gray-950 p-4 sm:p-6">
 
-      {/* Toast solicitud creada */}
+      {/* Notificación solicitud creada */}
       {solicitudCreada !== null && (
-        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl animate-pulse-once"
-          style={{ background: '#052e16', border: '2px solid #166534', minWidth: 260 }}>
-          <CheckCircle2 size={20} className="text-green-400 flex-shrink-0" />
-          <div>
-            <p className="text-green-300 font-bold text-sm">Solicitud creada</p>
-            <p className="text-green-400 text-xs">ID de tu solicitud: <span className="font-mono font-bold text-white">#{solicitudCreada}</span></p>
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm px-4"
+          style={{ filter: 'drop-shadow(0 8px 32px rgba(0,0,0,0.6))' }}>
+          <div className="rounded-2xl px-6 py-5" style={{ background: '#052e16', border: '2px solid #16a34a' }}>
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 size={22} className="text-green-400 flex-shrink-0" />
+                <p className="text-green-300 font-bold text-base">Solicitud creada</p>
+              </div>
+              <button onClick={() => setSolicitudCreada(null)} className="text-green-800 hover:text-green-400 mt-0.5">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="rounded-xl px-4 py-3 mb-3" style={{ background: '#071c10', border: '1px solid #166534' }}>
+              <p className="text-gray-400 text-xs mb-1">Descripción</p>
+              <p className="text-white text-sm font-medium">{solicitudCreada.descripcion}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-gray-500 text-xs">ID asignado:</span>
+              <span className="font-mono font-bold text-lg text-white">#{solicitudCreada.numero}</span>
+            </div>
           </div>
-          <button onClick={() => setSolicitudCreada(null)} className="ml-2 text-green-700 hover:text-green-400">
-            <X size={14} />
-          </button>
         </div>
       )}
 
