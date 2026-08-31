@@ -329,12 +329,31 @@ export default function MensajeriaPage() {
                                     ? <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: '#450a0a', color: '#fca5a5' }}>URGENTE</span>
                                     : <span className="text-xs text-gray-600">Normal</span>}
                                 </td>
-                                <td className="px-3 py-2.5 whitespace-nowrap">
-                                  {s.mensajero_asignado
-                                    ? <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded" style={{ background: '#0d2d2d', color: '#2dd4bf', border: '1px solid #0d9488' }}>
-                                        <Bike size={10} />{s.mensajero_asignado}
-                                      </span>
-                                    : <span className="text-gray-700 text-xs">—</span>}
+                                <td className="px-3 py-2.5" style={{ minWidth: 150 }}
+                                  onMouseDown={e => e.stopPropagation()}>
+                                  {dimmed ? (
+                                    s.mensajero_asignado
+                                      ? <span className="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded" style={{ background: '#0d2d2d', color: '#2dd4bf', border: '1px solid #0d9488' }}>
+                                          <Bike size={10} />{s.mensajero_asignado}
+                                        </span>
+                                      : <span className="text-gray-700 text-xs">—</span>
+                                  ) : (
+                                    <select
+                                      value={s.mensajero_asignado ?? ''}
+                                      onChange={async e => {
+                                        const val = e.target.value || null
+                                        await fetch(`/api/solicitudes/mensajeria/${s.id}`, {
+                                          method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                                          body: JSON.stringify({ estado: s.estado, observacion: s.observacion, gestionado_por: s.gestionado_por ?? gestor!.nombre, mensajero_asignado: val }),
+                                        })
+                                        cargarSolicitudes()
+                                      }}
+                                      className="text-xs font-semibold rounded cursor-pointer focus:outline-none"
+                                      style={{ background: '#0d2d2d', color: s.mensajero_asignado ? '#2dd4bf' : '#6b7280', border: '1px solid #0d9488', padding: '2px 6px' }}>
+                                      <option value="" style={{ background: '#111827', color: '#9ca3af' }}>— asignar —</option>
+                                      {mensajeros.map(m => <option key={m} value={m} style={{ background: '#111827', color: '#e2e8f0' }}>{m}</option>)}
+                                    </select>
+                                  )}
                                 </td>
                                 <td className="px-3 py-2.5">
                                   <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded whitespace-nowrap"
