@@ -7,7 +7,7 @@ import { Send, ArrowLeft, Plus, Clock, CheckCircle2, XCircle, Search, Lock, X, L
 type Estado = 'Pendiente' | 'En Trámite' | 'Finalizada' | 'Rechazada'
 
 type Solicitud = {
-  id: string; created_at: string; fecha: string
+  id: string; numero: number; created_at: string; fecha: string
   solicitante_nombre: string; area: string
   destinatario: string; direccion: string; descripcion: string
   urgencia: 'Normal' | 'Urgente'
@@ -48,10 +48,11 @@ export default function MensajeriaPage() {
     urgencia: 'Normal' as 'Normal' | 'Urgente',
   })
 
-  const [accionId,     setAccionId]     = useState<string | null>(null)
-  const [accionTipo,   setAccionTipo]   = useState<AccionTipo | null>(null)
-  const [accionObs,    setAccionObs]    = useState('')
-  const [savingAccion, setSavingAccion] = useState(false)
+  const [accionId,        setAccionId]        = useState<string | null>(null)
+  const [accionTipo,      setAccionTipo]      = useState<AccionTipo | null>(null)
+  const [accionObs,       setAccionObs]       = useState('')
+  const [savingAccion,    setSavingAccion]    = useState(false)
+  const [solicitudCreada, setSolicitudCreada] = useState<number | null>(null)
 
   const [busqueda,     setBusqueda]     = useState('')
   const [filtroEstado, setFiltroEstado] = useState<'Todos' | Estado>('Todos')
@@ -111,6 +112,10 @@ export default function MensajeriaPage() {
       if (!res.ok) { setErrorForm(data.error || 'Error al guardar'); return }
       setModalNueva(false)
       setForm({ solicitante_nombre: '', area: '', destinatario: '', direccion: '', descripcion: '', urgencia: 'Normal' })
+      if (data.numero) {
+        setSolicitudCreada(data.numero)
+        setTimeout(() => setSolicitudCreada(null), 6000)
+      }
       if (gestor) cargarSolicitudes()
     } catch { setErrorForm('Error de conexión') }
     finally { setSaving(false) }
@@ -145,6 +150,22 @@ export default function MensajeriaPage() {
 
   return (
     <div className="min-h-screen bg-gray-950 p-4 sm:p-6">
+
+      {/* Toast solicitud creada */}
+      {solicitudCreada !== null && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 px-5 py-3 rounded-2xl shadow-2xl"
+          style={{ background: '#052e16', border: '2px solid #166534', minWidth: 260 }}>
+          <CheckCircle2 size={20} className="text-green-400 flex-shrink-0" />
+          <div>
+            <p className="text-green-300 font-bold text-sm">Solicitud creada</p>
+            <p className="text-green-400 text-xs">ID de tu solicitud: <span className="font-mono font-bold text-white">#{solicitudCreada}</span></p>
+          </div>
+          <button onClick={() => setSolicitudCreada(null)} className="ml-2 text-green-700 hover:text-green-400">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       <div className="max-w-6xl mx-auto">
 
         {/* Header */}
@@ -229,8 +250,8 @@ export default function MensajeriaPage() {
                                   opacity:      dimmed ? 0.6 : 1,
                                 }}>
                                 <td className="px-3 py-2.5 whitespace-nowrap">
-                                  <span className="font-mono text-xs px-1.5 py-0.5 rounded" style={{ background: '#1e293b', color: '#94a3b8' }}>
-                                    #{s.id.slice(0, 8).toUpperCase()}
+                                  <span className="font-mono text-sm font-bold px-2 py-0.5 rounded" style={{ background: '#1e293b', color: '#e2e8f0' }}>
+                                    #{s.numero ?? '—'}
                                   </span>
                                 </td>
                                 <td className="px-3 py-2.5 text-gray-400 font-mono text-xs whitespace-nowrap">{s.fecha}</td>

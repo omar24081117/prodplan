@@ -7,13 +7,13 @@ import { ArrowLeft, ClipboardList, Clock, CheckCircle2, XCircle, RefreshCw, Load
 type Estado = 'Pendiente' | 'En Trámite' | 'Finalizada' | 'Rechazada'
 
 type SolicitudCompra = {
-  id: string; fecha: string; solicitante_nombre: string; area: string
+  id: string; numero: number; fecha: string; solicitante_nombre: string; area: string
   tipo_solicitud: string; descripcion: string; cantidad: string; unidad: string
   urgencia: string; estado: Estado
   observacion: string | null; gestionado_por: string | null; gestionado_en: string | null
 }
 type SolicitudMensajeria = {
-  id: string; fecha: string; solicitante_nombre: string; area: string
+  id: string; numero: number; fecha: string; solicitante_nombre: string; area: string
   destinatario: string; direccion: string; descripcion: string
   urgencia: string; estado: Estado
   observacion: string | null; gestionado_por: string | null; gestionado_en: string | null
@@ -192,8 +192,8 @@ export default function InformeSolicitudesPage() {
                       return (
                         <tr key={s.id} style={{ background: i % 2 === 0 ? '#0d1117' : '#0f172a', borderBottom: '1px solid #1e293b', opacity: dimmed ? 0.6 : 1 }}>
                           <td className="px-3 py-2.5 whitespace-nowrap">
-                            <span className="font-mono text-xs px-1.5 py-0.5 rounded" style={{ background: '#1e293b', color: '#94a3b8' }}>
-                              #{s.id.slice(0, 8).toUpperCase()}
+                            <span className="font-mono text-sm font-bold px-2 py-0.5 rounded" style={{ background: '#1e293b', color: '#e2e8f0' }}>
+                              #{s.numero ?? '—'}
                             </span>
                           </td>
                           <td className="px-3 py-2.5 text-gray-400 font-mono text-xs whitespace-nowrap">{s.fecha}</td>
@@ -248,8 +248,8 @@ export default function InformeSolicitudesPage() {
                       return (
                         <tr key={s.id} style={{ background: i % 2 === 0 ? '#0d1117' : '#0f172a', borderBottom: '1px solid #1e293b', opacity: dimmed ? 0.6 : 1 }}>
                           <td className="px-3 py-2.5 whitespace-nowrap">
-                            <span className="font-mono text-xs px-1.5 py-0.5 rounded" style={{ background: '#1e293b', color: '#94a3b8' }}>
-                              #{s.id.slice(0, 8).toUpperCase()}
+                            <span className="font-mono text-sm font-bold px-2 py-0.5 rounded" style={{ background: '#1e293b', color: '#e2e8f0' }}>
+                              #{s.numero ?? '—'}
                             </span>
                           </td>
                           <td className="px-3 py-2.5 text-gray-400 font-mono text-xs whitespace-nowrap">{s.fecha}</td>
