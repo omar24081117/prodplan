@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ShoppingCart, ArrowLeft, Plus, Clock, CheckCircle2, XCircle, Search, Lock, X, Loader2, Play, Flag } from 'lucide-react'
 
@@ -149,6 +149,26 @@ export default function SolicitudesComprasPage() {
     })
     .sort((a, b) => (SORT_ORDER[a.estado] ?? 4) - (SORT_ORDER[b.estado] ?? 4))
 
+  const tableRef = useRef<HTMLDivElement>(null)
+  const dragging  = useRef(false)
+  const startX    = useRef(0)
+  const scrollL   = useRef(0)
+  function onDragStart(e: React.MouseEvent) {
+    dragging.current = true
+    startX.current = e.pageX
+    scrollL.current = tableRef.current?.scrollLeft ?? 0
+    if (tableRef.current) tableRef.current.style.cursor = 'grabbing'
+  }
+  function onDragMove(e: React.MouseEvent) {
+    if (!dragging.current || !tableRef.current) return
+    e.preventDefault()
+    tableRef.current.scrollLeft = scrollL.current - (e.pageX - startX.current)
+  }
+  function onDragEnd() {
+    dragging.current = false
+    if (tableRef.current) tableRef.current.style.cursor = 'grab'
+  }
+
   if (!authOk) return null
 
   const ESTADOS_FILTRO: Array<'Todos' | Estado> = ['Todos', 'Pendiente', 'En Trámite', 'Finalizada', 'Rechazada']
@@ -243,7 +263,10 @@ export default function SolicitudesComprasPage() {
                 {filtradas.length === 0 ? (
                   <p className="text-center text-gray-600 py-12 text-sm">No hay solicitudes</p>
                 ) : (
-                  <div className="overflow-x-auto">
+                  <div ref={tableRef} className="overflow-x-auto select-none"
+                    style={{ cursor: 'grab' }}
+                    onMouseDown={onDragStart} onMouseMove={onDragMove}
+                    onMouseUp={onDragEnd} onMouseLeave={onDragEnd}>
                     <table className="w-full text-sm">
                       <thead>
                         <tr style={{ background: '#020617', borderBottom: '2px solid #1e293b' }}>
@@ -274,8 +297,8 @@ export default function SolicitudesComprasPage() {
                                 <td className="px-3 py-2.5 text-white font-medium whitespace-nowrap">{s.solicitante_nombre}</td>
                                 <td className="px-3 py-2.5 text-gray-400 text-xs whitespace-nowrap">{s.area}</td>
                                 <td className="px-3 py-2.5 text-cyan-400 text-xs font-semibold whitespace-nowrap">{s.tipo_solicitud}</td>
-                                <td className="px-3 py-2.5 text-gray-200 max-w-[160px]">
-                                  <span className="block truncate" title={s.descripcion}>{s.descripcion}</span>
+                                <td className="px-3 py-2.5 text-gray-200" style={{ minWidth: 200 }}>
+                                  {s.descripcion}
                                 </td>
                                 <td className="px-3 py-2.5 text-gray-300 whitespace-nowrap">{s.cantidad} {s.unidad}</td>
                                 <td className="px-3 py-2.5">
