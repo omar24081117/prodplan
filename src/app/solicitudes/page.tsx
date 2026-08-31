@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { ShoppingCart, Send, Lock, X, Loader2 } from 'lucide-react'
+import { ShoppingCart, Send, Lock, X, Loader2, ClipboardList } from 'lucide-react'
 
 type SolicitudesUser = { nombre: string; rol: string }
 
@@ -123,6 +123,16 @@ export default function SolicitudesPage() {
             <Send size={28} className="text-purple-300 mb-3" />
             <p className="text-white font-bold text-lg">Mensajería</p>
             <p className="text-purple-200/60 text-sm mt-1">Envíos, correspondencia y entregas externas</p>
+          </button>
+
+          <button onClick={() => router.push('/solicitudes/informe')}
+            className="p-5 rounded-2xl text-left transition-all hover:brightness-110 flex items-center gap-4"
+            style={{ background: '#111827', border: '1px solid #374151' }}>
+            <ClipboardList size={24} className="text-yellow-400 flex-shrink-0" />
+            <div>
+              <p className="text-white font-bold">Estado de Solicitudes</p>
+              <p className="text-gray-500 text-sm mt-0.5">Ver todas las solicitudes y su estado actual</p>
+            </div>
           </button>
         </div>
       </div>
