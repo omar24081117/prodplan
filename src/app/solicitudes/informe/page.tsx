@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, ClipboardList, Clock, CheckCircle2, XCircle, RefreshCw, Loader2, Play } from 'lucide-react'
 
@@ -76,6 +76,33 @@ export default function InformeSolicitudesPage() {
   }, [])
 
   useEffect(() => { if (authOk) cargar() }, [authOk, cargar])
+
+  const tableComprasRef   = useRef<HTMLDivElement>(null)
+  const tableMensajeriaRef = useRef<HTMLDivElement>(null)
+  const dragging = useRef(false)
+  const startX   = useRef(0)
+  const scrollL  = useRef(0)
+  const activeRef = useRef<HTMLDivElement | null>(null)
+
+  function onDragStart(ref: React.RefObject<HTMLDivElement | null>) {
+    return (e: React.MouseEvent) => {
+      dragging.current = true
+      activeRef.current = ref.current
+      startX.current = e.pageX
+      scrollL.current = ref.current?.scrollLeft ?? 0
+      if (ref.current) ref.current.style.cursor = 'grabbing'
+    }
+  }
+  function onDragMove(e: React.MouseEvent) {
+    if (!dragging.current || !activeRef.current) return
+    e.preventDefault()
+    activeRef.current.scrollLeft = scrollL.current - (e.pageX - startX.current)
+  }
+  function onDragEnd() {
+    dragging.current = false
+    if (activeRef.current) activeRef.current.style.cursor = 'grab'
+    activeRef.current = null
+  }
 
   if (!authOk) return null
 
@@ -177,7 +204,9 @@ export default function InformeSolicitudesPage() {
             ) : listaCompras.length === 0 ? (
               <p className="text-center text-gray-600 py-12 text-sm">Sin solicitudes</p>
             ) : (
-              <div className="overflow-x-auto">
+              <div ref={tableComprasRef} className="overflow-x-auto select-none" style={{ cursor: 'grab' }}
+                onMouseDown={onDragStart(tableComprasRef)} onMouseMove={onDragMove}
+                onMouseUp={onDragEnd} onMouseLeave={onDragEnd}>
                 <table className="text-sm" style={{ minWidth: '100%', tableLayout: 'auto' }}>
                   <thead>
                     <tr style={{ background: '#020617', borderBottom: '2px solid #1e293b' }}>
@@ -233,7 +262,9 @@ export default function InformeSolicitudesPage() {
             ) : listaMensajeria.length === 0 ? (
               <p className="text-center text-gray-600 py-12 text-sm">Sin solicitudes</p>
             ) : (
-              <div className="overflow-x-auto">
+              <div ref={tableMensajeriaRef} className="overflow-x-auto select-none" style={{ cursor: 'grab' }}
+                onMouseDown={onDragStart(tableMensajeriaRef)} onMouseMove={onDragMove}
+                onMouseUp={onDragEnd} onMouseLeave={onDragEnd}>
                 <table className="text-sm" style={{ minWidth: '100%', tableLayout: 'auto' }}>
                   <thead>
                     <tr style={{ background: '#020617', borderBottom: '2px solid #1e293b' }}>
