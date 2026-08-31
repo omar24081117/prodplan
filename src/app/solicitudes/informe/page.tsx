@@ -178,7 +178,7 @@ export default function InformeSolicitudesPage() {
               <p className="text-center text-gray-600 py-12 text-sm">Sin solicitudes</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="text-sm" style={{ minWidth: '100%', tableLayout: 'auto' }}>
                   <thead>
                     <tr style={{ background: '#020617', borderBottom: '2px solid #1e293b' }}>
                       {['ID', 'Fecha', 'Solicitante', 'Área', 'Tipo', 'Descripción', 'Cant.', 'Urgencia', 'Estado', 'Lo realizado / Gestor'].map(h => (
@@ -200,8 +200,8 @@ export default function InformeSolicitudesPage() {
                           <td className="px-3 py-2.5 text-white font-medium whitespace-nowrap">{s.solicitante_nombre}</td>
                           <td className="px-3 py-2.5 text-gray-400 text-xs whitespace-nowrap">{s.area}</td>
                           <td className="px-3 py-2.5 text-cyan-400 text-xs font-semibold whitespace-nowrap">{s.tipo_solicitud}</td>
-                          <td className="px-3 py-2.5 text-gray-200 max-w-[150px]">
-                            <span className="block truncate" title={s.descripcion}>{s.descripcion}</span>
+                          <td className="px-3 py-2.5 text-gray-200" style={{ minWidth: 220, whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                            {s.descripcion}
                           </td>
                           <td className="px-3 py-2.5 text-gray-300 whitespace-nowrap">{s.cantidad} {s.unidad}</td>
                           <td className="px-3 py-2.5">
@@ -234,7 +234,7 @@ export default function InformeSolicitudesPage() {
               <p className="text-center text-gray-600 py-12 text-sm">Sin solicitudes</p>
             ) : (
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="text-sm" style={{ minWidth: '100%', tableLayout: 'auto' }}>
                   <thead>
                     <tr style={{ background: '#020617', borderBottom: '2px solid #1e293b' }}>
                       {['ID', 'Fecha', 'Solicitante', 'Área', 'Destinatario', 'Dirección', 'Descripción', 'Urgencia', 'Estado', 'Lo realizado / Gestor'].map(h => (
@@ -259,8 +259,8 @@ export default function InformeSolicitudesPage() {
                           <td className="px-3 py-2.5 text-gray-300 text-xs max-w-[100px]">
                             <span className="block truncate" title={s.direccion}>{s.direccion}</span>
                           </td>
-                          <td className="px-3 py-2.5 text-gray-200 max-w-[130px]">
-                            <span className="block truncate" title={s.descripcion}>{s.descripcion}</span>
+                          <td className="px-3 py-2.5 text-gray-200" style={{ minWidth: 220, whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                            {s.descripcion}
                           </td>
                           <td className="px-3 py-2.5">
                             {s.urgencia === 'Urgente'
