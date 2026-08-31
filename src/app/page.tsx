@@ -65,7 +65,7 @@ const CARDS = [
   {
     label: 'Solicitudes y Mensajería',
     desc:  'Compras internas y comunicación',
-    href:  '/solicitudes/compras',
+    href:  '/solicitudes',
     grad:  'linear-gradient(135deg, #0e4f5c, #0f6674)',
     border:'#22b8cc',
     shadow:'rgba(34,184,204,0.2)',

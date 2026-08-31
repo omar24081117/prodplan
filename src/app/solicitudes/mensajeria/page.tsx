@@ -1,151 +1,426 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { MessageSquare, ArrowLeft, Send, User } from 'lucide-react'
+import { Send, ArrowLeft, Plus, Clock, CheckCircle2, XCircle, Search, Lock, X, Loader2 } from 'lucide-react'
 
-type Mensaje = {
+type Solicitud = {
   id: string
-  autor: string
+  created_at: string
+  fecha: string
+  solicitante_nombre: string
   area: string
-  texto: string
-  hora: string
-  propio?: boolean
+  destinatario: string
+  direccion: string
+  descripcion: string
+  urgencia: 'Normal' | 'Urgente'
+  estado: 'Pendiente' | 'Aprobada' | 'Rechazada'
+  observacion: string | null
+  gestionado_por: string | null
 }
 
-const MENSAJES_EJEMPLO: Mensaje[] = [
-  { id: '1', autor: 'Juan Pérez', area: 'Producción', texto: '¿Alguien sabe si ya llegó el pedido de empaques?', hora: '08:14' },
-  { id: '2', autor: 'María López', area: 'Almacén', texto: 'Sí, llegó ayer tarde. Están en la bodega zona B.', hora: '08:22' },
-  { id: '3', autor: 'Carlos Ríos', area: 'Producción', texto: 'Perfecto, gracias. Lo pasamos a planta en la tarde.', hora: '08:35' },
-  { id: '4', autor: 'Rosa Supervisor', area: 'Supervisión', texto: 'Buenos días equipo. Recuerden el turno 2 empieza a las 13:00 hoy.', hora: '09:01' },
-]
+const EST = {
+  Pendiente: { bg: '#1c1400', color: '#fbbf24', border: '#854d0e' },
+  Aprobada:  { bg: '#052e16', color: '#4ade80', border: '#166534' },
+  Rechazada: { bg: '#1a0505', color: '#f87171', border: '#7f1d1d' },
+}
 
 export default function MensajeriaPage() {
   const router = useRouter()
-  const [mensajes, setMensajes] = useState<Mensaje[]>(MENSAJES_EJEMPLO)
-  const [texto, setTexto]       = useState('')
-  const [nombre, setNombre]     = useState('')
-  const [area, setArea]         = useState('')
-  const [configurado, setConfigurado] = useState(false)
-  const bottomRef = useRef<HTMLDivElement>(null)
+
+  const [gestor,       setGestor]       = useState<{ nombre: string } | null>(null)
+  const [solicitudes,  setSolicitudes]  = useState<Solicitud[]>([])
+  const [loadingSols,  setLoadingSols]  = useState(false)
+  const [personal,     setPersonal]     = useState<string[]>([])
+
+  const [modalGestion,  setModalGestion]  = useState(false)
+  const [cedulaInput,   setCedulaInput]   = useState('')
+  const [errorGestion,  setErrorGestion]  = useState('')
+  const [loadingAuth,   setLoadingAuth]   = useState(false)
+
+  const [modalNueva, setModalNueva] = useState(false)
+  const [saving,     setSaving]     = useState(false)
+  const [errorForm,  setErrorForm]  = useState('')
+  const [form, setForm] = useState({
+    solicitante_nombre: '', area: '',
+    destinatario: '', direccion: '', descripcion: '',
+    urgencia: 'Normal' as 'Normal' | 'Urgente',
+  })
+
+  const [accionId,      setAccionId]      = useState<string | null>(null)
+  const [accionTipo,    setAccionTipo]    = useState<'Aprobada' | 'Rechazada' | null>(null)
+  const [accionObs,     setAccionObs]     = useState('')
+  const [savingAccion,  setSavingAccion]  = useState(false)
+
+  const [busqueda,     setBusqueda]     = useState('')
+  const [filtroEstado, setFiltroEstado] = useState<'Todos' | 'Pendiente' | 'Aprobada' | 'Rechazada'>('Todos')
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [mensajes])
+    fetch('/api/personal')
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data))
+          setPersonal((data as { nombre: string; activo: boolean }[]).filter(p => p.activo).map(p => p.nombre).sort())
+      })
+      .catch(() => {})
+  }, [])
 
-  function enviar(e: React.FormEvent) {
+  async function cargarSolicitudes() {
+    setLoadingSols(true)
+    try {
+      const res  = await fetch('/api/solicitudes/mensajeria')
+      const data = await res.json()
+      if (Array.isArray(data)) setSolicitudes(data)
+    } catch {}
+    finally { setLoadingSols(false) }
+  }
+
+  useEffect(() => { if (gestor) cargarSolicitudes() }, [gestor])
+
+  async function intentarGestion(e: React.FormEvent) {
     e.preventDefault()
-    if (!texto.trim()) return
-    const ahora = new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Bogota' })
-    setMensajes(prev => [...prev, {
-      id: Date.now().toString(),
-      autor: nombre,
-      area,
-      texto: texto.trim(),
-      hora: ahora,
-      propio: true,
-    }])
-    setTexto('')
+    setLoadingAuth(true); setErrorGestion('')
+    try {
+      const res = await fetch('/api/solicitudes/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cedula: cedulaInput.trim(), modulo: 'mensajeria' }),
+      })
+      const data = await res.json()
+      if (!res.ok)              { setErrorGestion(data.error || 'Error'); return }
+      if (!data.puedeGestionar) { setErrorGestion('No tienes acceso a la gestión de mensajería'); return }
+      setGestor({ nombre: data.nombre })
+      setModalGestion(false); setCedulaInput('')
+    } catch { setErrorGestion('Error de conexión') }
+    finally { setLoadingAuth(false) }
   }
 
-  if (!configurado) {
-    return (
-      <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
-        <div className="w-full max-w-sm rounded-2xl p-6" style={{ background: '#111827', border: '1px solid #374151' }}>
-          <div className="flex items-center gap-2 mb-5">
-            <MessageSquare size={18} className="text-blue-400" />
-            <h2 className="text-white font-bold text-base">Identificarte para chatear</h2>
-          </div>
-          <div className="flex flex-col gap-3">
-            <div>
-              <label className="text-xs text-gray-400 block mb-1">Tu nombre *</label>
-              <input autoFocus value={nombre} onChange={e => setNombre(e.target.value)}
-                placeholder="Nombre completo"
-                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500" />
-            </div>
-            <div>
-              <label className="text-xs text-gray-400 block mb-1">Área / Cargo *</label>
-              <input value={area} onChange={e => setArea(e.target.value)}
-                placeholder="Producción, Almacén..."
-                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-blue-500" />
-            </div>
-            <button
-              onClick={() => { if (nombre.trim() && area.trim()) setConfigurado(true) }}
-              disabled={!nombre.trim() || !area.trim()}
-              className="w-full py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-40 mt-1"
-              style={{ background: 'linear-gradient(135deg, #1a3a5c, #1e4d6e)' }}>
-              Entrar al chat
-            </button>
-            <button onClick={() => router.push('/solicitudes')}
-              className="text-gray-600 hover:text-gray-400 text-xs text-center">
-              Cancelar
-            </button>
-          </div>
-        </div>
-      </div>
-    )
+  async function enviarSolicitud(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true); setErrorForm('')
+    try {
+      const res = await fetch('/api/solicitudes/mensajeria', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      const data = await res.json()
+      if (!res.ok) { setErrorForm(data.error || 'Error al guardar'); return }
+      setModalNueva(false)
+      setForm({ solicitante_nombre: '', area: '', destinatario: '', direccion: '', descripcion: '', urgencia: 'Normal' })
+      if (gestor) cargarSolicitudes()
+    } catch { setErrorForm('Error de conexión') }
+    finally { setSaving(false) }
   }
+
+  async function ejecutarAccion() {
+    if (!accionId || !accionTipo || !gestor) return
+    setSavingAccion(true)
+    try {
+      const res = await fetch(`/api/solicitudes/mensajeria/${accionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ estado: accionTipo, observacion: accionObs, gestionado_por: gestor.nombre }),
+      })
+      if (res.ok) { setAccionId(null); setAccionTipo(null); setAccionObs(''); cargarSolicitudes() }
+    } catch {}
+    finally { setSavingAccion(false) }
+  }
+
+  const filtradas = solicitudes.filter(s => {
+    const ok1 = s.descripcion.toLowerCase().includes(busqueda.toLowerCase()) || s.solicitante_nombre.toLowerCase().includes(busqueda.toLowerCase()) || s.destinatario.toLowerCase().includes(busqueda.toLowerCase())
+    const ok2  = filtroEstado === 'Todos' || s.estado === filtroEstado
+    return ok1 && ok2
+  })
 
   return (
-    <div className="min-h-screen bg-gray-950 flex flex-col" style={{ maxHeight: '100dvh' }}>
-      {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-gray-800" style={{ background: '#0d1117' }}>
-        <button onClick={() => router.push('/solicitudes')} className="text-gray-500 hover:text-white">
-          <ArrowLeft size={18} />
-        </button>
-        <MessageSquare size={18} className="text-blue-400" />
-        <h1 className="text-white font-bold text-base">Mensajería Interna</h1>
-        <span className="ml-auto text-xs text-gray-600">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 mr-1.5 animate-pulse" />
-          En línea como <span className="text-gray-400">{nombre}</span>
-        </span>
-      </div>
+    <div className="min-h-screen bg-gray-950 p-4 sm:p-6">
+      <div className="max-w-5xl mx-auto">
 
-      {/* Mensajes */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3" style={{ background: '#0a0f0a' }}>
-        {mensajes.map(m => (
-          <div key={m.id} className={`flex gap-3 ${m.propio ? 'flex-row-reverse' : ''}`}>
-            <div className="w-8 h-8 rounded-full shrink-0 flex items-center justify-center text-xs font-bold"
-              style={{ background: m.propio ? '#0e4f5c' : '#1a3a5c', color: m.propio ? '#67e8f9' : '#93c5fd' }}>
-              {m.autor.charAt(0).toUpperCase()}
-            </div>
-            <div className={`flex flex-col gap-0.5 max-w-[70%] ${m.propio ? 'items-end' : ''}`}>
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-6 flex-wrap">
+          <button onClick={() => router.push('/solicitudes')} className="text-gray-500 hover:text-white transition-colors">
+            <ArrowLeft size={18} />
+          </button>
+          <h1 className="text-xl font-bold text-white flex items-center gap-2">
+            <Send size={20} className="text-purple-400" /> Mensajería
+          </h1>
+          <div className="ml-auto flex items-center gap-2">
+            {!gestor ? (
+              <button onClick={() => setModalGestion(true)}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm text-gray-400 hover:text-white transition-all"
+                style={{ background: '#1f2937', border: '1px solid #374151' }}>
+                <Lock size={13} /> Gestión
+              </button>
+            ) : (
               <div className="flex items-center gap-2">
-                {!m.propio && <span className="text-xs font-semibold text-blue-300">{m.autor}</span>}
-                <span className="text-xs text-gray-600">{m.area}</span>
-                <span className="text-xs text-gray-700">{m.hora}</span>
+                <span className="text-xs text-purple-400 font-medium">{gestor.nombre}</span>
+                <button onClick={() => setGestor(null)}
+                  className="text-xs text-gray-600 hover:text-gray-400 px-2 py-1 rounded"
+                  style={{ background: '#1f2937', border: '1px solid #374151' }}>
+                  Salir
+                </button>
               </div>
-              <div className="px-3 py-2 rounded-xl text-sm text-white leading-relaxed"
-                style={{ background: m.propio ? '#0e4f5c' : '#1e2936', border: `1px solid ${m.propio ? '#22b8cc22' : '#1e3a5f'}` }}>
-                {m.texto}
-              </div>
-            </div>
+            )}
+            <button onClick={() => setModalNueva(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-white transition-all hover:brightness-110"
+              style={{ background: 'linear-gradient(135deg, #3b1c5c, #4c2580)', border: '1px solid #9333ea' }}>
+              <Plus size={14} /> Nueva Solicitud
+            </button>
           </div>
-        ))}
-        <div ref={bottomRef} />
+        </div>
+
+        {/* Gestión mode */}
+        {gestor && (
+          <>
+            <div className="flex gap-2 mb-4 flex-wrap">
+              <div className="flex items-center gap-2 flex-1 min-w-[180px] rounded-lg px-3 py-2"
+                style={{ background: '#111827', border: '1px solid #1e293b' }}>
+                <Search size={13} className="text-gray-500" />
+                <input type="text" placeholder="Buscar descripción, solicitante o destinatario..."
+                  value={busqueda} onChange={e => setBusqueda(e.target.value)}
+                  className="flex-1 bg-transparent text-white text-sm focus:outline-none" />
+              </div>
+              {(['Todos', 'Pendiente', 'Aprobada', 'Rechazada'] as const).map(est => {
+                const st     = est !== 'Todos' ? EST[est] : null
+                const active = filtroEstado === est
+                return (
+                  <button key={est} onClick={() => setFiltroEstado(est)}
+                    className="px-3 py-2 rounded-lg text-xs font-bold transition-all"
+                    style={{
+                      background: active ? (st?.bg ?? '#1f2937') : '#111827',
+                      color:      active ? (st?.color ?? '#e5e7eb') : '#6b7280',
+                      border:     `1px solid ${active ? (st?.border ?? '#374151') : '#1f2937'}`,
+                    }}>
+                    {est}
+                  </button>
+                )
+              })}
+            </div>
+
+            {loadingSols ? (
+              <div className="flex justify-center py-12">
+                <Loader2 size={24} className="text-purple-400 animate-spin" />
+              </div>
+            ) : (
+              <div className="rounded-xl overflow-hidden" style={{ background: '#0d1117', border: '1px solid #1e293b' }}>
+                {filtradas.length === 0 ? (
+                  <p className="text-center text-gray-600 py-12 text-sm">No hay solicitudes</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr style={{ background: '#020617', borderBottom: '2px solid #1e293b' }}>
+                          {['Fecha', 'Solicitante', 'Área', 'Destinatario', 'Dirección', 'Descripción', 'Urgencia', 'Estado', 'Acción'].map(h => (
+                            <th key={h} className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide whitespace-nowrap"
+                              style={{ color: '#64748b' }}>{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filtradas.map((s, i) => {
+                          const st       = EST[s.estado]
+                          const isAccion = accionId === s.id
+                          return (
+                            <>
+                              <tr key={s.id}
+                                style={{ background: i % 2 === 0 ? '#0d1117' : '#0f172a', borderBottom: isAccion ? 'none' : '1px solid #1e293b' }}>
+                                <td className="px-3 py-2.5 text-gray-400 font-mono text-xs whitespace-nowrap">{s.fecha}</td>
+                                <td className="px-3 py-2.5 text-white font-medium whitespace-nowrap">{s.solicitante_nombre}</td>
+                                <td className="px-3 py-2.5 text-gray-400 text-xs whitespace-nowrap">{s.area}</td>
+                                <td className="px-3 py-2.5 text-purple-300 font-medium whitespace-nowrap">{s.destinatario}</td>
+                                <td className="px-3 py-2.5 text-gray-300 text-xs max-w-[120px]">
+                                  <span className="block truncate" title={s.direccion}>{s.direccion}</span>
+                                </td>
+                                <td className="px-3 py-2.5 text-gray-200 max-w-[160px]">
+                                  <span className="block truncate" title={s.descripcion}>{s.descripcion}</span>
+                                  {s.observacion && <span className="text-gray-600 text-xs block truncate">{s.observacion}</span>}
+                                </td>
+                                <td className="px-3 py-2.5">
+                                  {s.urgencia === 'Urgente'
+                                    ? <span className="text-xs font-bold px-1.5 py-0.5 rounded" style={{ background: '#450a0a', color: '#fca5a5' }}>URGENTE</span>
+                                    : <span className="text-xs text-gray-600">Normal</span>}
+                                </td>
+                                <td className="px-3 py-2.5">
+                                  <span className="inline-flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded"
+                                    style={{ background: st.bg, color: st.color }}>
+                                    {s.estado === 'Aprobada' ? <CheckCircle2 size={10} /> : s.estado === 'Rechazada' ? <XCircle size={10} /> : <Clock size={10} />}
+                                    {s.estado}
+                                  </span>
+                                  {s.gestionado_por && <span className="block text-gray-600 text-xs mt-0.5">{s.gestionado_por}</span>}
+                                </td>
+                                <td className="px-3 py-2.5 whitespace-nowrap">
+                                  {s.estado === 'Pendiente' && (
+                                    <div className="flex gap-1">
+                                      <button onClick={() => { setAccionId(s.id); setAccionTipo('Aprobada'); setAccionObs('') }}
+                                        className="px-2 py-1 rounded text-xs font-bold transition-all hover:brightness-110"
+                                        style={{ background: '#052e16', color: '#4ade80', border: '1px solid #166534' }}>
+                                        Aprobar
+                                      </button>
+                                      <button onClick={() => { setAccionId(s.id); setAccionTipo('Rechazada'); setAccionObs('') }}
+                                        className="px-2 py-1 rounded text-xs font-bold transition-all hover:brightness-110"
+                                        style={{ background: '#1a0505', color: '#f87171', border: '1px solid #7f1d1d' }}>
+                                        Rechazar
+                                      </button>
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                              {isAccion && (
+                                <tr key={`${s.id}-acc`} style={{ background: '#080d08', borderBottom: '2px solid #1e293b' }}>
+                                  <td colSpan={9} className="px-4 py-3">
+                                    <div className="flex items-center gap-3 flex-wrap">
+                                      <span className="text-xs font-bold" style={{ color: accionTipo === 'Aprobada' ? '#4ade80' : '#f87171' }}>
+                                        {accionTipo === 'Aprobada' ? '✓ Aprobar envío' : '✕ Rechazar envío'}
+                                      </span>
+                                      <input type="text" placeholder="Observación (opcional)" value={accionObs} autoFocus
+                                        onChange={e => setAccionObs(e.target.value)}
+                                        className="flex-1 min-w-[140px] bg-gray-900 border border-gray-700 text-white rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:border-purple-500" />
+                                      <button onClick={ejecutarAccion} disabled={savingAccion}
+                                        className="px-3 py-1.5 rounded-lg text-xs font-bold text-white disabled:opacity-50 flex items-center gap-1"
+                                        style={{ background: accionTipo === 'Aprobada' ? '#166534' : '#7f1d1d' }}>
+                                        {savingAccion && <Loader2 size={12} className="animate-spin" />}
+                                        Confirmar
+                                      </button>
+                                      <button onClick={() => { setAccionId(null); setAccionTipo(null) }} className="text-gray-600 hover:text-gray-400">
+                                        <X size={14} />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
+
+        {!gestor && (
+          <div className="text-center py-20 text-gray-600">
+            <Send size={52} className="mx-auto mb-4 opacity-15" />
+            <p className="text-sm text-gray-500">Usa <span className="text-white font-semibold">+ Nueva Solicitud</span> para solicitar un envío.</p>
+            <p className="text-xs mt-1 text-gray-700">El seguimiento y aprobación lo gestiona el responsable de mensajería.</p>
+          </div>
+        )}
       </div>
 
-      {/* Input */}
-      <form onSubmit={enviar}
-        className="flex items-center gap-3 px-4 py-3 border-t border-gray-800"
-        style={{ background: '#0d1117' }}>
-        <div className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-          style={{ background: '#0e4f5c', color: '#67e8f9' }}>
-          <User size={12} />
+      {/* Modal Gestión auth */}
+      {modalGestion && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}>
+          <div className="w-full max-w-xs rounded-2xl p-6" style={{ background: '#111827', border: '1px solid #374151' }}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <Lock size={16} className="text-purple-400" />
+                <h3 className="text-white font-bold text-base">Acceso de Gestión</h3>
+              </div>
+              <button onClick={() => { setModalGestion(false); setCedulaInput(''); setErrorGestion('') }}
+                className="text-gray-500 hover:text-white"><X size={16} /></button>
+            </div>
+            <p className="text-gray-500 text-xs mb-4">Director · Gerencia · Mensajería</p>
+            <form onSubmit={intentarGestion} className="flex flex-col gap-3">
+              <input type="text" inputMode="numeric" placeholder="Ingresa tu cédula"
+                value={cedulaInput} autoFocus
+                onChange={e => setCedulaInput(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-purple-500" />
+              {errorGestion && <p className="text-red-400 text-xs text-center">{errorGestion}</p>}
+              <button type="submit" disabled={loadingAuth || !cedulaInput.trim()}
+                className="w-full py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2"
+                style={{ background: 'linear-gradient(135deg, #3b1c5c, #4c2580)', border: '1px solid #9333ea' }}>
+                {loadingAuth && <Loader2 size={14} className="animate-spin" />}
+                Ingresar
+              </button>
+            </form>
+          </div>
         </div>
-        <input
-          type="text"
-          placeholder="Escribe un mensaje..."
-          value={texto}
-          onChange={e => setTexto(e.target.value)}
-          className="flex-1 bg-gray-800 border border-gray-700 text-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:border-blue-500"
-        />
-        <button type="submit" disabled={!texto.trim()}
-          className="p-2.5 rounded-xl transition-all disabled:opacity-40 hover:brightness-110"
-          style={{ background: 'linear-gradient(135deg, #1a3a5c, #1e4d6e)', border: '1px solid #3a8abf' }}>
-          <Send size={16} className="text-white" />
-        </button>
-      </form>
+      )}
+
+      {/* Modal Nueva Solicitud */}
+      {modalNueva && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(4px)' }}>
+          <div className="w-full max-w-md rounded-2xl p-6" style={{ background: '#111827', border: '1px solid #374151' }}>
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-white font-bold text-base flex items-center gap-2">
+                <Send size={16} className="text-purple-400" /> Nueva Solicitud de Mensajería
+              </h3>
+              <button onClick={() => setModalNueva(false)} className="text-gray-500 hover:text-white"><X size={16} /></button>
+            </div>
+            <form onSubmit={enviarSolicitud} className="flex flex-col gap-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">Solicitante *</label>
+                  {personal.length > 0 ? (
+                    <select required value={form.solicitante_nombre}
+                      onChange={e => setForm(f => ({ ...f, solicitante_nombre: e.target.value }))}
+                      className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-500 cursor-pointer">
+                      <option value="">— seleccionar —</option>
+                      {personal.map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  ) : (
+                    <input required value={form.solicitante_nombre}
+                      onChange={e => setForm(f => ({ ...f, solicitante_nombre: e.target.value }))}
+                      className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-500" />
+                  )}
+                </div>
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">Área *</label>
+                  <input required value={form.area}
+                    onChange={e => setForm(f => ({ ...f, area: e.target.value }))}
+                    className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-500" />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Destinatario / empresa *</label>
+                <input required value={form.destinatario} placeholder="Nombre o empresa de destino"
+                  onChange={e => setForm(f => ({ ...f, destinatario: e.target.value }))}
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-500" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Dirección de destino *</label>
+                <input required value={form.direccion} placeholder="Dirección completa"
+                  onChange={e => setForm(f => ({ ...f, direccion: e.target.value }))}
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-500" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Descripción del envío *</label>
+                <textarea required rows={2} value={form.descripcion} placeholder="Qué se va a enviar (documentos, paquete, etc.)"
+                  onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))}
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-purple-500 resize-none" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 block mb-1">Urgencia</label>
+                <select value={form.urgencia}
+                  onChange={e => setForm(f => ({ ...f, urgencia: e.target.value as 'Normal' | 'Urgente' }))}
+                  className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm focus:outline-none cursor-pointer">
+                  <option value="Normal">Normal</option>
+                  <option value="Urgente">Urgente</option>
+                </select>
+              </div>
+              {errorForm && <p className="text-red-400 text-xs">{errorForm}</p>}
+              <div className="flex gap-2 mt-2">
+                <button type="button" onClick={() => setModalNueva(false)}
+                  className="flex-1 py-2.5 rounded-xl text-sm text-gray-400 hover:text-white"
+                  style={{ background: '#1f2937', border: '1px solid #374151' }}>
+                  Cancelar
+                </button>
+                <button type="submit" disabled={saving}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2"
+                  style={{ background: 'linear-gradient(135deg, #3b1c5c, #4c2580)', border: '1px solid #9333ea' }}>
+                  {saving && <Loader2 size={14} className="animate-spin" />}
+                  Enviar Solicitud
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

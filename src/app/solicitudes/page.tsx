@@ -1,57 +1,39 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { ShoppingCart, MessageSquare, ArrowLeft } from 'lucide-react'
-import LeafBackground from '@/components/LeafBackground'
+import { ShoppingCart, Send, ArrowLeft } from 'lucide-react'
 
 export default function SolicitudesPage() {
   const router = useRouter()
 
   return (
-    <main className="relative min-h-screen flex flex-col items-center justify-center p-6 gap-6"
-      style={{ background: '#d4e8b8' }}>
-      <LeafBackground />
+    <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
+      <div className="w-full max-w-sm">
+        <div className="flex items-center gap-3 mb-8">
+          <button onClick={() => router.push('/')} className="text-gray-500 hover:text-white transition-colors">
+            <ArrowLeft size={18} />
+          </button>
+          <h1 className="text-xl font-bold text-white">Solicitudes</h1>
+        </div>
 
-      <div className="relative z-10 text-center mb-2">
-        <h1 className="text-3xl font-bold text-white tracking-wide">Solicitudes y Mensajería</h1>
-        <p className="text-gray-400 text-sm mt-1">Selecciona un módulo para continuar</p>
+        <div className="flex flex-col gap-4">
+          <button onClick={() => router.push('/solicitudes/compras')}
+            className="p-6 rounded-2xl text-left transition-all hover:brightness-110"
+            style={{ background: 'linear-gradient(135deg, #0e4f5c, #0f6674)', border: '1px solid #22b8cc' }}>
+            <ShoppingCart size={28} className="text-cyan-300 mb-3" />
+            <p className="text-white font-bold text-lg">Solicitudes de Compra</p>
+            <p className="text-cyan-200/60 text-sm mt-1">Materiales, insumos y suministros internos</p>
+          </button>
+
+          <button onClick={() => router.push('/solicitudes/mensajeria')}
+            className="p-6 rounded-2xl text-left transition-all hover:brightness-110"
+            style={{ background: 'linear-gradient(135deg, #3b1c5c, #4c2580)', border: '1px solid #9333ea' }}>
+            <Send size={28} className="text-purple-300 mb-3" />
+            <p className="text-white font-bold text-lg">Mensajería</p>
+            <p className="text-purple-200/60 text-sm mt-1">Envíos, correspondencia y entregas externas</p>
+          </button>
+        </div>
       </div>
-
-      <div className="relative z-10 w-full max-w-sm flex flex-col gap-4">
-
-        {/* Solicitudes de Compra */}
-        <button
-          onClick={() => router.push('/solicitudes/compras')}
-          className="w-full rounded-2xl p-6 flex items-center justify-between transition-all hover:scale-[1.02] active:scale-[0.98]"
-          style={{ background: 'linear-gradient(135deg, #0e4f5c, #0f6674)', border: '1px solid #22b8cc', boxShadow: '0 4px 20px rgba(34,184,204,0.25)' }}>
-          <div className="text-left">
-            <p className="text-white font-bold text-xl">Solicitudes de Compra</p>
-            <p className="text-cyan-200/70 text-sm mt-0.5">Solicita materiales e insumos</p>
-          </div>
-          <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.12)' }}>
-            <ShoppingCart size={36} strokeWidth={1.5} className="text-white" />
-          </div>
-        </button>
-
-        {/* Mensajería */}
-        <button
-          onClick={() => router.push('/solicitudes/mensajeria')}
-          className="w-full rounded-2xl p-6 flex items-center justify-between transition-all hover:scale-[1.02] active:scale-[0.98]"
-          style={{ background: 'linear-gradient(135deg, #1a3a5c, #1e4d6e)', border: '1px solid #3a8abf', boxShadow: '0 4px 20px rgba(30,120,180,0.25)' }}>
-          <div className="text-left">
-            <p className="text-white font-bold text-xl">Mensajería</p>
-            <p className="text-blue-200/70 text-sm mt-0.5">Comunicación interna del equipo</p>
-          </div>
-          <div className="p-3 rounded-xl" style={{ background: 'rgba(255,255,255,0.12)' }}>
-            <MessageSquare size={36} strokeWidth={1.5} className="text-white" />
-          </div>
-        </button>
-
-        <button onClick={() => router.push('/')}
-          className="flex items-center justify-center gap-2 text-gray-400 hover:text-white text-sm transition-colors mt-2">
-          <ArrowLeft size={14} /> Volver al inicio
-        </button>
-      </div>
-    </main>
+    </div>
   )
 }
