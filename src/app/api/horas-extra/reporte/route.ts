@@ -103,15 +103,17 @@ export async function GET(request: NextRequest) {
   const fechaInicio = searchParams.get('fecha_inicio') ?? hoy.slice(0, 7) + '-01'
   const fechaFin    = searchParams.get('fecha_fin')    ?? hoy
   const contrato    = searchParams.get('contrato') === 'Temporal' ? 'Temporal' : 'Fijo'
+  const rolesParam  = searchParams.get('roles')
+  const roles       = rolesParam ? rolesParam.split(',') : ['Operario', 'Supervisor']
 
   const supabase = await createClient()
 
-  // 1. Personal con rol Operario/Supervisor activo del tipo de contrato indicado
+  // 1. Personal activo del tipo de contrato y roles indicados
   const { data: personalRaw, error: personalErr } = await supabase
     .from('personal')
     .select('cedula, nombre, rol')
     .eq('tipo_contrato', contrato)
-    .in('rol', ['Operario', 'Supervisor'])
+    .in('rol', roles)
     .eq('activo', true)
     .order('nombre', { ascending: true })
 
