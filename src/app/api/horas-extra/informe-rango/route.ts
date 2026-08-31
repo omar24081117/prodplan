@@ -175,6 +175,7 @@ export async function GET(req: NextRequest) {
     if (hrsExtra === 0 && hrsNoc === 0 && recargo === 0 && recargoDiurno === 0) continue
 
     const estado = apro ? (apro.rechazado ? 'Rechazado' : 'Aprobado') : 'Pendiente'
+    if (estado !== 'Aprobado') continue
 
     if (!personaMap[cedKey]) {
       personaMap[cedKey] = {
@@ -193,9 +194,7 @@ export async function GET(req: NextRequest) {
     p.hrsNoc        += hrsNoc
     p.recargo       += recargo
     p.recargoDiurno += recargoDiurno
-    if (estado === 'Aprobado')      p.aprobadas++
-    else if (estado === 'Rechazado') p.rechazadas++
-    else                             p.pendientes++
+    p.aprobadas++
     p.detalle.push({ fecha: a.fecha, hrsExtra, hrsNoc, recargo, recargoDiurno, estado, aprobadoPor: apro?.aprobado_por_nombre })
   }
 
@@ -212,6 +211,8 @@ export async function GET(req: NextRequest) {
 
     const apro   = aproMap[key]
     const estado = apro ? (apro.rechazado ? 'Rechazado' : 'Aprobado') : 'Pendiente'
+    if (estado !== 'Aprobado') continue
+
     const cedKey = String(ov.cedula)
     const info   = nombreMap[cedKey]
 
@@ -232,9 +233,7 @@ export async function GET(req: NextRequest) {
     p.hrsNoc        += hrsNoc
     p.recargo       += recargo
     p.recargoDiurno += recargoDiurno
-    if (estado === 'Aprobado')       p.aprobadas++
-    else if (estado === 'Rechazado') p.rechazadas++
-    else                             p.pendientes++
+    p.aprobadas++
     p.detalle.push({ fecha: ov.fecha, hrsExtra, hrsNoc, recargo, recargoDiurno, estado, aprobadoPor: apro?.aprobado_por_nombre })
   }
 
