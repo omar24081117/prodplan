@@ -68,6 +68,8 @@ export default function RRHHHorasExtraPage() {
   const [expHasta,      setExpHasta]      = useState(hoy)
   const [descargando,   setDescargando]   = useState(false)
   const [descargandoT,  setDescargandoT]  = useState(false)
+  const [descargandoAF, setDescargandoAF] = useState(false)
+  const [descargandoAT, setDescargandoAT] = useState(false)
 
   const cargar = useCallback(async (f: string) => {
     setLoading(true)
@@ -117,6 +119,25 @@ export default function RRHHHorasExtraPage() {
       const a    = document.createElement('a')
       a.href     = url
       a.download = `horas-extra-${contrato.toLowerCase()}_${expDesde}_${expHasta}.xlsx`
+      a.click()
+      URL.revokeObjectURL(url)
+      setModalExp(false)
+    } finally {
+      setLoad(false)
+    }
+  }
+
+  async function descargarReporteAlmacen(contrato: 'Fijo' | 'Temporal') {
+    const setLoad = contrato === 'Fijo' ? setDescargandoAF : setDescargandoAT
+    setLoad(true)
+    try {
+      const res = await fetch(`/api/horas-extra/reporte?fecha_inicio=${expDesde}&fecha_fin=${expHasta}&contrato=${contrato}&roles=Almacenista`)
+      if (!res.ok) { alert('Error al generar reporte almacén'); return }
+      const blob = await res.blob()
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = `horas-extra-almacen-${contrato.toLowerCase()}_${expDesde}_${expHasta}.xlsx`
       a.click()
       URL.revokeObjectURL(url)
       setModalExp(false)
@@ -293,19 +314,41 @@ export default function RRHHHorasExtraPage() {
                   className="w-full bg-gray-800 border border-gray-700 text-white rounded-lg px-3 py-2 text-sm font-mono focus:outline-none" />
               </div>
             </div>
-            <div className="flex flex-col gap-2">
-              <button onClick={() => descargarReporte('Fijo')} disabled={descargando || descargandoT}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-all hover:brightness-110"
-                style={{ background: 'linear-gradient(135deg,#14532d,#166534)', border: '1px solid #4ade80' }}>
-                <FileBarChart2 size={14} />
-                {descargando ? 'Descargando...' : 'Personal Fijo'}
-              </button>
-              <button onClick={() => descargarReporte('Temporal')} disabled={descargando || descargandoT}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-all hover:brightness-110"
-                style={{ background: 'linear-gradient(135deg,#1e3a5c,#1e4d7a)', border: '1px solid #3a8abf' }}>
-                <FileBarChart2 size={14} />
-                {descargandoT ? 'Descargando...' : 'Personal Temporal'}
-              </button>
+            <div className="flex flex-col gap-3">
+              <div>
+                <p className="text-xs text-gray-500 mb-1.5">Operario / Supervisor</p>
+                <div className="flex flex-col gap-2">
+                  <button onClick={() => descargarReporte('Fijo')} disabled={descargando || descargandoT || descargandoAF || descargandoAT}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-all hover:brightness-110"
+                    style={{ background: 'linear-gradient(135deg,#14532d,#166534)', border: '1px solid #4ade80' }}>
+                    <FileBarChart2 size={14} />
+                    {descargando ? 'Descargando...' : 'Personal Fijo'}
+                  </button>
+                  <button onClick={() => descargarReporte('Temporal')} disabled={descargando || descargandoT || descargandoAF || descargandoAT}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-all hover:brightness-110"
+                    style={{ background: 'linear-gradient(135deg,#1e3a5c,#1e4d7a)', border: '1px solid #3a8abf' }}>
+                    <FileBarChart2 size={14} />
+                    {descargandoT ? 'Descargando...' : 'Personal Temporal'}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1.5">Almacén</p>
+                <div className="flex flex-col gap-2">
+                  <button onClick={() => descargarReporteAlmacen('Fijo')} disabled={descargando || descargandoT || descargandoAF || descargandoAT}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-all hover:brightness-110"
+                    style={{ background: 'linear-gradient(135deg,#1e3a5f,#1d4ed8)', border: '1px solid #60a5fa' }}>
+                    <FileBarChart2 size={14} />
+                    {descargandoAF ? 'Descargando...' : 'Almacén Fijo'}
+                  </button>
+                  <button onClick={() => descargarReporteAlmacen('Temporal')} disabled={descargando || descargandoT || descargandoAF || descargandoAT}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold text-white disabled:opacity-50 transition-all hover:brightness-110"
+                    style={{ background: 'linear-gradient(135deg,#4a1d96,#6d28d9)', border: '1px solid #a78bfa' }}>
+                    <FileBarChart2 size={14} />
+                    {descargandoAT ? 'Descargando...' : 'Almacén Temporal'}
+                  </button>
+                </div>
+              </div>
               <button onClick={() => setModalExp(false)}
                 className="w-full py-2 rounded-xl text-sm text-gray-500 hover:text-white transition-all"
                 style={{ background: '#1f2937', border: '1px solid #374151' }}>
