@@ -134,7 +134,7 @@ export default function EjecucionPage() {
 
   async function cargarAsistencia() {
     const fecha = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
-    const res  = await fetch(`/api/asistencia/lista?fecha=${fecha}`)
+    const res  = await fetch(`/api/asistencia/lista?fecha=${fecha}&solo_operarios=true`)
     const data = await res.json()
     // La API devuelve { modo, registros, estadisticas } o un array directo (compatibilidad)
     const lista = Array.isArray(data) ? data : (data?.registros ?? [])

@@ -74,6 +74,7 @@ export async function GET(request: NextRequest) {
   }
 
   // ── MODO DÍA ────────────────────────────────────────────────────────────
+  const soloOperarios = searchParams.get('solo_operarios') === 'true'
   const diaConsulta = fecha || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
   const { data, error } = await supabase
     .from('asistencia')
@@ -84,7 +85,8 @@ export async function GET(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  const registros = (data ?? []).map(r => ({ ...r, rol: rolMap[r.cedula] ?? 'Otro' }))
+  let registros = (data ?? []).map(r => ({ ...r, rol: rolMap[r.cedula] ?? 'Otro' }))
+  if (soloOperarios) registros = registros.filter(r => r.rol === 'Operario')
 
   return NextResponse.json({
     modo: 'dia',

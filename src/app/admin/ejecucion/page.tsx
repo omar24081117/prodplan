@@ -134,7 +134,7 @@ export default function AdminEjecucionPage() {
   useEffect(() => { cargar() }, [cargar])
 
   async function cargarAsistencia() {
-    const res  = await fetch(`/api/asistencia/lista?fecha=${fecha}`)
+    const res  = await fetch(`/api/asistencia/lista?fecha=${fecha}&solo_operarios=true`)
     const data = await res.json()
     const lista = Array.isArray(data) ? data : (data?.registros ?? [])
     setAsistenciaHoy(lista)
