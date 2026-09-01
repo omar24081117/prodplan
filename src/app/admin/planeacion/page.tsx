@@ -18,6 +18,7 @@ export default function PlaneacionPage() {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ fecha: '', semana: '', personal_disponible: '' })
   const [error, setError] = useState('')
+  const [eliminando, setEliminando] = useState<string | null>(null)
 
   const cargar = useCallback(async () => {
     setLoading(true)
@@ -28,6 +29,14 @@ export default function PlaneacionPage() {
   }, [])
 
   useEffect(() => { cargar() }, [cargar])
+
+  async function eliminar(id: string) {
+    if (!confirm('¿Eliminar esta jornada? Se borrarán también sus actividades.')) return
+    setEliminando(id)
+    await fetch(`/api/jornadas/${id}`, { method: 'DELETE' })
+    setEliminando(null)
+    cargar()
+  }
 
   async function guardar(e: React.FormEvent) {
     e.preventDefault()
@@ -141,12 +150,24 @@ export default function PlaneacionPage() {
                   <span>{j.personal_disponible} personas disponibles</span>
                 </p>
               </div>
-              <Link
-                href={`/admin/planeacion/${j.id}`}
-                className="bg-gray-800 hover:bg-gray-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
-              >
-                Planear →
-              </Link>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => eliminar(j.id)}
+                  disabled={eliminando === j.id}
+                  title="Eliminar jornada"
+                  className="text-gray-500 hover:text-red-400 disabled:opacity-40 transition-colors p-1.5 rounded-lg hover:bg-gray-800"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                </button>
+                <Link
+                  href={`/admin/planeacion/${j.id}`}
+                  className="bg-gray-800 hover:bg-gray-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+                >
+                  Planear →
+                </Link>
+              </div>
             </div>
           ))}
         </div>
