@@ -536,7 +536,7 @@ export default function AdminEjecucionPage() {
               <p className="text-gray-400 text-sm">No hay asistencia registrada para esta fecha</p>
             ) : (
               <div className="flex flex-col gap-2 overflow-y-auto flex-1">
-                {asistenciaHoy.map(op => {
+                {asistenciaHoy.filter(op => op.rol === 'Operario').map(op => {
                   const asignado = (asignadosPor[modalPersonas] || []).some(a => a.cedula === op.cedula)
                   const cargando = savingPersona === op.cedula
                   return (
