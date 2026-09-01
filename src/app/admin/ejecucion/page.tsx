@@ -37,7 +37,7 @@ type Actividad = {
 }
 type Reporte = { hora: string; cantidad: number; tiempo_improductivo: number | null; observacion: string | null }
 type OperarioAsignado = { cedula: string; nombre: string }
-type Asistente = { cedula: string; nombre: string; hora_ingreso: string }
+type Asistente = { cedula: string; nombre: string; hora_ingreso: string; rol: string }
 type SortField = 'proceso' | 'turno' | 'producto' | 'pct'
 type SortDir = 'asc' | 'desc'
 
