@@ -134,7 +134,7 @@ export default function PlaneacionPage() {
             <div key={j.id} className="bg-gray-900 border border-gray-800 rounded-xl p-4 flex items-center justify-between">
               <div>
                 <p className="text-white font-semibold">
-                  {new Date(j.fecha + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+                  {j.fecha ? new Date(j.fecha.slice(0, 10) + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : '—'}
                 </p>
                 <p className="text-gray-400 text-sm mt-0.5">
                   {j.semana && <span className="mr-3">{j.semana}</span>}

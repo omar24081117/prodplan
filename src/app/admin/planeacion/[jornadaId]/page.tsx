@@ -317,7 +317,7 @@ export default function JornadaPage() {
         <div>
           <Link href="/admin/planeacion" className="text-gray-500 hover:text-gray-300 text-sm">← Jornadas</Link>
           <h1 className="text-2xl font-bold text-white mt-1">
-            {new Date(jornada.fecha + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}
+            {jornada.fecha ? new Date(jornada.fecha.slice(0, 10) + 'T12:00:00').toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' }) : '—'}
           </h1>
           {jornada.semana && <p className="text-gray-400 text-sm">{jornada.semana}</p>}
         </div>
