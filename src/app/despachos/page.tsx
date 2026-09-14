@@ -1215,8 +1215,8 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
 
           {/* Tabla — arrastrable con mouse */}
           <div ref={tableRef}
-            className="tabla-scroll overflow-x-scroll rounded-b-xl select-none"
-            style={{ border: '1px solid #d1d5db', borderTop: 'none', cursor: 'grab' }}
+            className="tabla-scroll overflow-x-scroll overflow-y-auto rounded-b-xl select-none"
+            style={{ border: '1px solid #d1d5db', borderTop: 'none', cursor: 'grab', maxHeight: 'calc(100vh - 290px)' }}
             onScroll={onTableScroll}
             onMouseDown={onDragStart}
             onMouseMove={onDragMove}
