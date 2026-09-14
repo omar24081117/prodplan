@@ -155,7 +155,8 @@ function EditCell({
       <span
         onClick={() => { if (!disabled) setEditing(true) }}
         title={disabled ? undefined : 'Clic para editar'}
-        className={`transition-colors ${disabled ? 'cursor-default' : 'cursor-pointer hover:text-blue-600'} ${!value ? 'text-gray-400' : 'text-gray-900'} ${className}`}
+        style={{ color: value ? '#111827' : '#9ca3af' }}
+        className={`transition-colors ${disabled ? 'cursor-default' : 'cursor-pointer'} ${className}`}
       >
         {display}
       </span>
@@ -954,7 +955,7 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
   return (
     <main
       className="min-h-screen flex flex-col"
-      style={{ background: '#0d1a2a', color: '#e2e8f0' }}
+      style={{ background: '#0d1a2a', color: '#111827' }}
     >
       {/* ── Header ── */}
       <div className="px-4 pt-4 pb-3 flex items-center gap-3"
