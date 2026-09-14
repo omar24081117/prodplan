@@ -1448,7 +1448,7 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
                       </td>
 
                       {/* F. MÁX */}
-                      <td className="px-3 py-2 whitespace-nowrap" style={p.fecha_max_modificada ? { background: '#fef2f2' } : {}}>
+                      <td className="px-3 py-2 whitespace-nowrap" style={p.fecha_max_modificada ? { background: '#fca5a5' } : {}}>
                         <EditCell
                           value={p.fecha_max_entrega}
                           type="date"
