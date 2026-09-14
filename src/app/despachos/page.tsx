@@ -74,11 +74,11 @@ function getEstado(d: Despacho): Estado {
 const LINEAS = ['Retail', 'Institucional', 'Hoteles', 'Maquila', 'Web o Plataforma'] as const
 
 const LINEA_BADGE: Record<string, { bg: string; color: string }> = {
-  'Retail':          { bg: 'rgba(30,80,180,0.3)',   color: '#60a5fa' },
-  'Institucional':   { bg: 'rgba(20,120,80,0.3)',   color: '#34d399' },
-  'Hoteles':         { bg: 'rgba(180,80,20,0.3)',   color: '#fb923c' },
-  'Maquila':         { bg: 'rgba(100,30,180,0.3)',  color: '#c084fc' },
-  'Web o Plataforma':{ bg: 'rgba(20,100,160,0.3)',  color: '#38bdf8' },
+  'Retail':          { bg: 'rgba(30,80,180,0.12)',  color: '#1d4ed8' },
+  'Institucional':   { bg: 'rgba(20,120,80,0.12)',  color: '#15803d' },
+  'Hoteles':         { bg: 'rgba(180,80,20,0.12)',  color: '#c2410c' },
+  'Maquila':         { bg: 'rgba(100,30,180,0.12)', color: '#7e22ce' },
+  'Web o Plataforma':{ bg: 'rgba(20,100,160,0.12)', color: '#0369a1' },
 }
 
 function lineaBadge(linea: string | null) {
@@ -155,14 +155,14 @@ function EditCell({
       <span
         onClick={() => { if (!disabled) setEditing(true) }}
         title={disabled ? undefined : 'Clic para editar'}
-        className={`transition-colors ${disabled ? 'cursor-default' : 'cursor-pointer hover:text-blue-300'} ${!value ? 'text-gray-600' : 'text-gray-200'} ${className}`}
+        className={`transition-colors ${disabled ? 'cursor-default' : 'cursor-pointer hover:text-blue-600'} ${!value ? 'text-gray-400' : 'text-gray-900'} ${className}`}
       >
         {display}
       </span>
     )
   }
 
-  const base = 'bg-gray-900 border border-blue-500 text-white rounded text-xs px-1 py-0.5 focus:outline-none'
+  const base = 'bg-white border border-blue-500 text-gray-900 rounded text-xs px-1 py-0.5 focus:outline-none'
 
   if (type === 'select' && options) return (
     <select
@@ -1549,7 +1549,7 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
                               }}>
                               <Package size={10} /> ✓ ALISTADO
                             </button>
-                            <span className="text-orange-300 text-xs leading-tight">{p.alistado_por}</span>
+                            <span className="text-orange-700 text-xs leading-tight">{p.alistado_por}</span>
                             {p.fecha_alistamiento && (
                               <span className="text-gray-500 text-xs leading-tight">{fmtDate(p.fecha_alistamiento)}</span>
                             )}
