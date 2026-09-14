@@ -1223,10 +1223,10 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
             onMouseUp={onDragEnd}
             onMouseLeave={onDragEnd}>
             <table className="w-full text-xs min-w-[1200px]">
-              <thead>
+              <thead className="sticky top-0 z-10" style={{ background: '#f1f5f9' }}>
                 <tr style={{ background: '#f1f5f9', borderBottom: '1px solid #e2e8f0' }}>
                   {['ESTADO','LÍNEA','TIPO ENVÍO','CLIENTE','OC','DOC','F. SUBIDA','F. MÁX.','F. DESPACHO','FACTURA','ENTREGA','CONFIRMACIÓN ENTREGA','ALISTADO POR','GUÍA','PROVEEDOR','OBSERVACIONES',''].map(h => (
-                    <th key={h} className="px-3 py-2 text-left text-gray-600 font-semibold uppercase tracking-wide whitespace-nowrap">
+                    <th key={h} className="px-3 py-2 text-left text-gray-600 font-semibold uppercase tracking-wide whitespace-nowrap" style={{ background: '#f1f5f9' }}>
                       {h}
                     </th>
                   ))}
@@ -1234,7 +1234,7 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
                 {/* ── Filter row ── */}
                 <tr style={{ background: '#e8f0f7', borderBottom: '1px solid #cbd5e1' }}>
                   {/* ESTADO */}
-                  <th className="px-2 py-1.5">
+                  <th className="px-2 py-1.5" style={{ background: '#e8f0f7' }}>
                     <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value as typeof filtroEstado)}
                       className="w-full text-xs rounded px-1 py-0.5 focus:outline-none cursor-pointer"
                       style={{ background: '#ffffff', border: '1px solid #d1d5db', color: filtroEstado ? '#b45309' : '#6b7280', minWidth: 80 }}>
