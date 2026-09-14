@@ -29,6 +29,9 @@ type Despacho = {
   alistado_por: string | null
   fecha_alistamiento: string | null
   created_at: string
+  confirmado_por: string | null
+  fecha_confirmacion: string | null
+  fecha_max_modificada: boolean | null
 }
 
 type Estado = 'DESPACHADO' | 'VENCIDO' | 'PENDIENTE'
@@ -406,6 +409,9 @@ export default function DespachosPage() {
   const [showForm, setShowForm]   = useState(false)
   const [deleting, setDeleting]   = useState<string | null>(null)
   const [revertId, setRevertId]   = useState<string | null>(null)
+  const [confirmandoId, setConfirmandoId] = useState<string | null>(null)
+  const [cedulaConfirm, setCedulaConfirm] = useState('')
+  const [savingConfirm, setSavingConfirm] = useState(false)
 
   // Filters
   const [filtroEstado, setFiltroEstado] = useState<'' | 'PENDIENTE' | 'VENCIDO' | 'DESPACHADO'>('')
@@ -571,12 +577,28 @@ export default function DespachosPage() {
 
   /* ── Inline save ──────────────────────────────────────────────────────── */
   async function saveField(id: string, field: string, value: string | null) {
+    const payload: Record<string, string | boolean | null> = { [field]: value }
+    if (field === 'fecha_max_entrega') payload.fecha_max_modificada = true
     await fetch(`/api/despachos/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ [field]: value })
+      body: JSON.stringify(payload)
     })
-    setPedidos(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p))
+    setPedidos(prev => prev.map(p => p.id === id ? { ...p, [field]: value, ...(field === 'fecha_max_entrega' ? { fecha_max_modificada: true } : {}) } : p))
+  }
+
+  async function confirmarEntrega(id: string) {
+    if (!cedulaConfirm.trim()) return
+    setSavingConfirm(true)
+    await fetch(`/api/despachos/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirmado_por: cedulaConfirm.trim(), fecha_confirmacion: new Date().toISOString() })
+    })
+    setPedidos(prev => prev.map(p => p.id === id ? { ...p, confirmado_por: cedulaConfirm.trim(), fecha_confirmacion: new Date().toISOString() } : p))
+    setConfirmandoId(null)
+    setCedulaConfirm('')
+    setSavingConfirm(false)
   }
 
   /* ── Delete ───────────────────────────────────────────────────────────── */
@@ -1185,7 +1207,7 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
           <div className="flex flex-col">
           {/* Scrollbar superior sincronizado */}
           <div ref={topBarRef} className="tabla-scroll overflow-x-scroll rounded-t-xl"
-            style={{ height: '14px', background: '#0a1525', borderTop: '1px solid #1a4060', borderLeft: '1px solid #1a4060', borderRight: '1px solid #1a4060' }}
+            style={{ height: '14px', background: '#e2e8f0', borderTop: '1px solid #d1d5db', borderLeft: '1px solid #d1d5db', borderRight: '1px solid #d1d5db' }}
             onScroll={onTopScroll}>
             <div style={{ width: tableScrollW, height: '1px' }} />
           </div>
@@ -1193,7 +1215,7 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
           {/* Tabla — arrastrable con mouse */}
           <div ref={tableRef}
             className="tabla-scroll overflow-x-scroll rounded-b-xl select-none"
-            style={{ border: '1px solid #1a4060', borderTop: 'none', cursor: 'grab' }}
+            style={{ border: '1px solid #d1d5db', borderTop: 'none', cursor: 'grab' }}
             onScroll={onTableScroll}
             onMouseDown={onDragStart}
             onMouseMove={onDragMove}
@@ -1201,20 +1223,20 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
             onMouseLeave={onDragEnd}>
             <table className="w-full text-xs min-w-[1200px]">
               <thead>
-                <tr style={{ background: '#0a1828', borderBottom: '1px solid #132030' }}>
-                  {['ESTADO','LÍNEA','TIPO ENVÍO','CLIENTE','OC','DOC','F. SUBIDA','F. MÁX.','F. DESPACHO','FACTURA','ENTREGA','ALISTADO POR','GUÍA','PROVEEDOR','OBSERVACIONES',''].map(h => (
-                    <th key={h} className="px-3 py-2 text-left text-gray-500 font-semibold uppercase tracking-wide whitespace-nowrap">
+                <tr style={{ background: '#f1f5f9', borderBottom: '1px solid #e2e8f0' }}>
+                  {['ESTADO','LÍNEA','TIPO ENVÍO','CLIENTE','OC','DOC','F. SUBIDA','F. MÁX.','F. DESPACHO','FACTURA','ENTREGA','CONFIRMACIÓN ENTREGA','ALISTADO POR','GUÍA','PROVEEDOR','OBSERVACIONES',''].map(h => (
+                    <th key={h} className="px-3 py-2 text-left text-gray-600 font-semibold uppercase tracking-wide whitespace-nowrap">
                       {h}
                     </th>
                   ))}
                 </tr>
                 {/* ── Filter row ── */}
-                <tr style={{ background: '#07111e', borderBottom: '1px solid #1a4060' }}>
+                <tr style={{ background: '#e8f0f7', borderBottom: '1px solid #cbd5e1' }}>
                   {/* ESTADO */}
                   <th className="px-2 py-1.5">
                     <select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value as typeof filtroEstado)}
                       className="w-full text-xs rounded px-1 py-0.5 focus:outline-none cursor-pointer"
-                      style={{ background: '#0d1e30', border: '1px solid #1a3050', color: filtroEstado ? '#facc15' : '#4b6a8a', minWidth: 80 }}>
+                      style={{ background: '#ffffff', border: '1px solid #d1d5db', color: filtroEstado ? '#b45309' : '#6b7280', minWidth: 80 }}>
                       <option value="">Todos</option>
                       <option value="VENCIDO">VENCIDO</option>
                       <option value="PENDIENTE">PENDIENTE</option>
@@ -1225,7 +1247,7 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
                   <th className="px-2 py-1.5">
                     <select value={filtroLinea} onChange={e => setFiltroLinea(e.target.value)}
                       className="w-full text-xs rounded px-1 py-0.5 focus:outline-none cursor-pointer"
-                      style={{ background: '#0d1e30', border: '1px solid #1a3050', color: filtroLinea ? '#60a5fa' : '#4b6a8a', minWidth: 90 }}>
+                      style={{ background: '#ffffff', border: '1px solid #d1d5db', color: filtroLinea ? '#2563eb' : '#6b7280', minWidth: 90 }}>
                       <option value="">Todas</option>
                       {LINEAS.map(l => <option key={l} value={l}>{l}</option>)}
                     </select>
@@ -1234,7 +1256,7 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
                   <th className="px-2 py-1.5">
                     <select value={filtroEnvio} onChange={e => setFiltroEnvio(e.target.value)}
                       className="w-full text-xs rounded px-1 py-0.5 focus:outline-none cursor-pointer"
-                      style={{ background: '#0d1e30', border: '1px solid #1a3050', color: filtroEnvio ? '#60a5fa' : '#4b6a8a', minWidth: 70 }}>
+                      style={{ background: '#ffffff', border: '1px solid #d1d5db', color: filtroEnvio ? '#2563eb' : '#6b7280', minWidth: 70 }}>
                       <option value="">Todos</option>
                       <option value="Normal">Normal</option>
                       <option value="Premium">Premium</option>
@@ -1244,71 +1266,73 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
                   <th className="px-2 py-1.5">
                     <input type="text" value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)}
                       placeholder="Filtrar…" className="w-full text-xs rounded px-1 py-0.5 focus:outline-none"
-                      style={{ background: '#0d1e30', border: `1px solid ${filtroCliente ? '#3a7abf' : '#1a3050'}`, color: '#e2e8f0', minWidth: 100 }} />
+                      style={{ background: '#ffffff', border: `1px solid ${filtroCliente ? '#3b82f6' : '#d1d5db'}`, color: '#111827', minWidth: 100 }} />
                   </th>
                   {/* OC */}
                   <th className="px-2 py-1.5">
                     <input type="text" value={filtroOC} onChange={e => setFiltroOC(e.target.value)}
                       placeholder="Filtrar…" className="w-full text-xs rounded px-1 py-0.5 focus:outline-none"
-                      style={{ background: '#0d1e30', border: `1px solid ${filtroOC ? '#3a7abf' : '#1a3050'}`, color: '#e2e8f0', minWidth: 70 }} />
+                      style={{ background: '#ffffff', border: `1px solid ${filtroOC ? '#3b82f6' : '#d1d5db'}`, color: '#111827', minWidth: 70 }} />
                   </th>
                   {/* DOC */}
                   <th className="px-2 py-1.5">
                     <input type="text" value={filtroDoc} onChange={e => setFiltroDoc(e.target.value)}
                       placeholder="Filtrar…" className="w-full text-xs rounded px-1 py-0.5 focus:outline-none"
-                      style={{ background: '#0d1e30', border: `1px solid ${filtroDoc ? '#3a7abf' : '#1a3050'}`, color: '#e2e8f0', minWidth: 70 }} />
+                      style={{ background: '#ffffff', border: `1px solid ${filtroDoc ? '#3b82f6' : '#d1d5db'}`, color: '#111827', minWidth: 70 }} />
                   </th>
                   {/* F. SUBIDA */}
                   <th className="px-2 py-1.5">
                     <input type="text" value={filtroFechaSubida} onChange={e => setFiltroFechaSubida(e.target.value)}
                       placeholder="dd/mm" className="w-full text-xs rounded px-1 py-0.5 focus:outline-none"
-                      style={{ background: '#0d1e30', border: `1px solid ${filtroFechaSubida ? '#3a7abf' : '#1a3050'}`, color: '#e2e8f0', minWidth: 60 }} />
+                      style={{ background: '#ffffff', border: `1px solid ${filtroFechaSubida ? '#3b82f6' : '#d1d5db'}`, color: '#111827', minWidth: 60 }} />
                   </th>
                   {/* F. MÁX. */}
                   <th className="px-2 py-1.5">
                     <input type="text" value={filtroFechaMax} onChange={e => setFiltroFechaMax(e.target.value)}
                       placeholder="dd/mm" className="w-full text-xs rounded px-1 py-0.5 focus:outline-none"
-                      style={{ background: '#0d1e30', border: `1px solid ${filtroFechaMax ? '#3a7abf' : '#1a3050'}`, color: '#e2e8f0', minWidth: 60 }} />
+                      style={{ background: '#ffffff', border: `1px solid ${filtroFechaMax ? '#3b82f6' : '#d1d5db'}`, color: '#111827', minWidth: 60 }} />
                   </th>
                   {/* F. DESPACHO */}
                   <th className="px-2 py-1.5">
                     <input type="text" value={filtroFechaDesp} onChange={e => setFiltroFechaDesp(e.target.value)}
                       placeholder="dd/mm" className="w-full text-xs rounded px-1 py-0.5 focus:outline-none"
-                      style={{ background: '#0d1e30', border: `1px solid ${filtroFechaDesp ? '#3a7abf' : '#1a3050'}`, color: '#e2e8f0', minWidth: 60 }} />
+                      style={{ background: '#ffffff', border: `1px solid ${filtroFechaDesp ? '#3b82f6' : '#d1d5db'}`, color: '#111827', minWidth: 60 }} />
                   </th>
                   {/* FACTURA */}
                   <th className="px-2 py-1.5">
                     <input type="text" value={filtroFactura} onChange={e => setFiltroFactura(e.target.value)}
                       placeholder="Filtrar…" className="w-full text-xs rounded px-1 py-0.5 focus:outline-none"
-                      style={{ background: '#0d1e30', border: `1px solid ${filtroFactura ? '#3a7abf' : '#1a3050'}`, color: '#e2e8f0', minWidth: 70 }} />
+                      style={{ background: '#ffffff', border: `1px solid ${filtroFactura ? '#3b82f6' : '#d1d5db'}`, color: '#111827', minWidth: 70 }} />
                   </th>
                   {/* ENTREGA */}
                   <th className="px-2 py-1.5">
                     <select value={filtroEntrega} onChange={e => setFiltroEntrega(e.target.value)}
                       className="w-full text-xs rounded px-1 py-0.5 focus:outline-none cursor-pointer"
-                      style={{ background: '#0d1e30', border: '1px solid #1a3050', color: filtroEntrega ? '#60a5fa' : '#4b6a8a', minWidth: 70 }}>
+                      style={{ background: '#ffffff', border: '1px solid #d1d5db', color: filtroEntrega ? '#2563eb' : '#6b7280', minWidth: 70 }}>
                       <option value="">Todos</option>
                       <option value="PARCIAL">PARCIAL</option>
                       <option value="COMPLETA">COMPLETA</option>
                     </select>
                   </th>
+                  {/* CONFIRMACIÓN ENTREGA */}
+                  <th className="px-2 py-1.5" />
                   {/* ALISTADO POR */}
                   <th className="px-2 py-1.5">
                     <input type="text" value={filtroAlistado} onChange={e => setFiltroAlistado(e.target.value)}
                       placeholder="Filtrar…" className="w-full text-xs rounded px-1 py-0.5 focus:outline-none"
-                      style={{ background: '#0d1e30', border: `1px solid ${filtroAlistado ? '#3a7abf' : '#1a3050'}`, color: '#e2e8f0', minWidth: 80 }} />
+                      style={{ background: '#ffffff', border: `1px solid ${filtroAlistado ? '#3b82f6' : '#d1d5db'}`, color: '#111827', minWidth: 80 }} />
                   </th>
                   {/* GUÍA */}
                   <th className="px-2 py-1.5">
                     <input type="text" value={filtroGuia} onChange={e => setFiltroGuia(e.target.value)}
                       placeholder="Filtrar…" className="w-full text-xs rounded px-1 py-0.5 focus:outline-none"
-                      style={{ background: '#0d1e30', border: `1px solid ${filtroGuia ? '#3a7abf' : '#1a3050'}`, color: '#e2e8f0', minWidth: 70 }} />
+                      style={{ background: '#ffffff', border: `1px solid ${filtroGuia ? '#3b82f6' : '#d1d5db'}`, color: '#111827', minWidth: 70 }} />
                   </th>
                   {/* PROVEEDOR */}
                   <th className="px-2 py-1.5">
                     <input type="text" value={filtroProveedor} onChange={e => setFiltroProveedor(e.target.value)}
                       placeholder="Filtrar…" className="w-full text-xs rounded px-1 py-0.5 focus:outline-none"
-                      style={{ background: '#0d1e30', border: `1px solid ${filtroProveedor ? '#3a7abf' : '#1a3050'}`, color: '#e2e8f0', minWidth: 80 }} />
+                      style={{ background: '#ffffff', border: `1px solid ${filtroProveedor ? '#3b82f6' : '#d1d5db'}`, color: '#111827', minWidth: 80 }} />
                   </th>
                   {/* OBSERVACIONES */}
                   <th className="px-2 py-1.5" colSpan={2} />
@@ -1317,15 +1341,17 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
               <tbody>
                 {filtrados.map((p, i) => {
                   const estado = getEstado(p)
-                  const rowBg = estado === 'DESPACHADO'
-                    ? 'rgba(16,60,30,0.35)'
+                  const rowBg = p.confirmado_por
+                    ? '#dcfce7'
+                    : estado === 'DESPACHADO'
+                    ? '#f0fdf4'
                     : estado === 'VENCIDO'
-                    ? 'rgba(80,10,10,0.35)'
-                    : i % 2 === 0 ? '#0f2035' : '#0d1a2a'
+                    ? '#fef2f2'
+                    : i % 2 === 0 ? '#ffffff' : '#f9fafb'
                   const lb = lineaBadge(p.linea)
 
                   return (
-                    <tr key={p.id} style={{ background: rowBg, borderBottom: '1px solid #0f1e30' }}>
+                    <tr key={p.id} style={{ background: rowBg, borderBottom: '1px solid #e5e7eb' }}>
                       {/* ESTADO */}
                       <td className="px-3 py-2 whitespace-nowrap">
                         <span className="px-2 py-0.5 rounded-full text-xs font-bold"
@@ -1421,12 +1447,12 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
                       </td>
 
                       {/* F. MÁX */}
-                      <td className="px-3 py-2 whitespace-nowrap">
+                      <td className="px-3 py-2 whitespace-nowrap" style={p.fecha_max_modificada ? { background: '#fef2f2' } : {}}>
                         <EditCell
                           value={p.fecha_max_entrega}
                           type="date"
                           onSave={v => saveField(p.id, 'fecha_max_entrega', v)}
-                          className={estado === 'VENCIDO' ? 'text-red-400' : ''}
+                          className="text-gray-900"
                           disabled={!puedeEditar}
                         />
                       </td>
@@ -1461,6 +1487,50 @@ update public.personal set rol = 'Operario' where rol is null;`}</pre>
                           onSave={v => saveField(p.id, 'entrega_tipo', v)}
                           disabled={!puedeEditar}
                         />
+                      </td>
+
+                      {/* CONFIRMACIÓN ENTREGA */}
+                      <td className="px-3 py-2 whitespace-nowrap min-w-[160px]">
+                        {estado === 'DESPACHADO' ? (
+                          p.confirmado_por ? (
+                            <div className="flex flex-col gap-0.5">
+                              <span className="text-green-700 font-semibold text-xs">✓ Confirmada</span>
+                              <span className="text-green-600 text-xs">{p.confirmado_por}</span>
+                            </div>
+                          ) : confirmandoId === p.id ? (
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="text"
+                                value={cedulaConfirm}
+                                onChange={e => setCedulaConfirm(e.target.value)}
+                                onMouseDown={e => e.stopPropagation()}
+                                placeholder="Cédula…"
+                                className="text-xs border border-green-300 rounded px-1.5 py-0.5 w-24 focus:outline-none focus:border-green-500"
+                                style={{ background: '#f0fdf4', color: '#166534' }}
+                                autoFocus
+                              />
+                              <button
+                                onClick={() => confirmarEntrega(p.id)}
+                                disabled={savingConfirm}
+                                className="text-xs bg-green-600 text-white px-1.5 py-0.5 rounded hover:bg-green-700 disabled:opacity-50"
+                              >✓</button>
+                              <button
+                                onClick={() => { setConfirmandoId(null); setCedulaConfirm('') }}
+                                className="text-xs text-gray-400 hover:text-gray-600"
+                              >✕</button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => { setConfirmandoId(p.id); setCedulaConfirm('') }}
+                              className="text-xs px-2 py-0.5 rounded border border-orange-300 text-orange-700 hover:bg-orange-50 transition-colors"
+                              style={{ background: '#fff7ed' }}
+                            >
+                              Pendiente confirmación
+                            </button>
+                          )
+                        ) : (
+                          <span className="text-gray-400 text-xs">—</span>
+                        )}
                       </td>
 
                       {/* ALISTADO POR */}
