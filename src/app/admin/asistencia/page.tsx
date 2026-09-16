@@ -1,7 +1,8 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { RefreshCw, Users, UserCheck, TrendingUp, Calendar, BarChart3, PlusCircle, X, Search, CheckCircle2, Loader2 } from 'lucide-react'
+import { RefreshCw, Users, UserCheck, TrendingUp, Calendar, BarChart3, PlusCircle, X, Search, CheckCircle2, Loader2, Download } from 'lucide-react'
+import * as XLSX from 'xlsx'
 
 type RegistroBase = { cedula: string; nombre: string; rol: string; hora_ingreso: string; hora_salida: string | null; fecha?: string }
 
@@ -132,6 +133,49 @@ export default function AsistenciaAdminPage() {
   const resOper = resumen.filter(r => r.rol === 'Operario')
   const resOtro = resumen.filter(r => r.rol !== 'Operario')
 
+  // ── Descarga Excel ────────────────────────────────────────────────────────
+  function descargar() {
+    const wb = XLSX.utils.book_new()
+
+    if (modo === 'dia') {
+      const filas = registros.map(r => ({
+        'Nombre':        r.nombre,
+        'Cédula':        r.cedula,
+        'Rol':           r.rol,
+        'Fecha':         fmtFecha(fecha),
+        'Hora entrada':  r.hora_ingreso,
+        'Hora salida':   r.hora_salida ?? '—',
+      }))
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(filas), 'Asistencia')
+      XLSX.writeFile(wb, `Asistencia_${fecha}.xlsx`)
+    } else {
+      const diasRango = stats.dias_en_rango ?? 1
+      // Hoja 1: Detalle por día
+      const detalle = registros.map(r => ({
+        'Nombre':        r.nombre,
+        'Cédula':        r.cedula,
+        'Rol':           r.rol,
+        'Fecha':         fmtFecha(r.fecha ?? ''),
+        'Hora entrada':  r.hora_ingreso,
+        'Hora salida':   r.hora_salida ?? '—',
+      }))
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(detalle), 'Detalle')
+
+      // Hoja 2: Resumen por empleado
+      const resumenFilas = resumen.map(r => ({
+        'Nombre':            r.nombre,
+        'Cédula':            r.cedula,
+        'Rol':               r.rol,
+        'Días asistidos':    r.dias,
+        'Días en rango':     diasRango,
+        '% Asistencia':      diasRango > 0 ? `${Math.round((r.dias / diasRango) * 100)}%` : '—',
+      }))
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(resumenFilas), 'Resumen')
+
+      XLSX.writeFile(wb, `Asistencia_${fInicio}_${fFin}.xlsx`)
+    }
+  }
+
   return (
     <div className="max-w-5xl mx-auto">
 
@@ -173,6 +217,16 @@ export default function AsistenciaAdminPage() {
 
         <button onClick={cargar} className="text-gray-400 hover:text-white px-3 py-2 bg-gray-800 rounded-lg hover:bg-gray-700 transition-all">
           <RefreshCw size={14} />
+        </button>
+
+        <button
+          onClick={descargar}
+          disabled={loading || registros.length === 0}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-semibold transition-all disabled:opacity-40"
+          style={{ background: '#064e3b', border: '1px solid #065f46', color: '#34d399' }}
+          title="Descargar reporte Excel"
+        >
+          <Download size={14} /> Descargar
         </button>
 
         <button onClick={abrirModalAgregar}
