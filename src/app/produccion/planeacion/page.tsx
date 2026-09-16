@@ -2680,8 +2680,11 @@ export default function PlaneacionPage() {
                       <th className="px-2 py-2 text-center sticky z-20" style={{ background: '#1e3a14', minWidth: 72, left: 240 }}>
                         <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#e8b870' }}>INV.</span>
                       </th>
-                      <th className="px-2 py-2 text-center sticky z-20" style={{ background: '#1e3a14', minWidth: 112, left: 312, borderRight: '2px solid #4a8a30', boxShadow: '3px 0 6px rgba(0,0,0,0.15)' }}>
+                      <th className="px-2 py-2 text-center sticky z-20" style={{ background: '#1e3a14', minWidth: 112, left: 312 }}>
                         <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#7ab5e8' }}>TOTAL PROYECTADO</span>
+                      </th>
+                      <th className="px-2 py-2 text-center sticky z-20" style={{ background: '#1e3a14', minWidth: 112, left: 424, borderRight: '2px solid #4a8a30', boxShadow: '3px 0 6px rgba(0,0,0,0.15)' }}>
+                        <span className="text-xs font-bold uppercase tracking-wide" style={{ color: '#e8b870' }}>TOTAL PEDIDO</span>
                       </th>
                       {semanasVisDm.map(s => {
                         const d = isoToDate(s)
@@ -2697,7 +2700,8 @@ export default function PlaneacionPage() {
                     <tr style={{ background: '#264a18', borderBottom: '2px solid #3a6228' }}>
                       <th className="sticky left-0 z-20" style={{ background: '#264a18' }} />
                       <th className="sticky z-20" style={{ background: '#264a18', left: 240, minWidth: 72 }} />
-                      <th className="px-2 py-1.5 text-center sticky z-20 font-bold uppercase" style={{ background: '#264a18', left: 312, minWidth: 112, borderRight: '2px solid #4a8a30', boxShadow: '3px 0 6px rgba(0,0,0,0.15)', color: '#7ab5e8', fontSize: '0.6rem' }}>FORECAST</th>
+                      <th className="px-2 py-1.5 text-center sticky z-20 font-bold uppercase" style={{ background: '#264a18', left: 312, minWidth: 112, color: '#7ab5e8', fontSize: '0.6rem' }}>FORECAST</th>
+                      <th className="px-2 py-1.5 text-center sticky z-20 font-bold uppercase" style={{ background: '#264a18', left: 424, minWidth: 112, borderRight: '2px solid #4a8a30', boxShadow: '3px 0 6px rgba(0,0,0,0.15)', color: '#e8b870', fontSize: '0.6rem' }}>PEDIDO</th>
                       {semanasVisDm.map(s => (
                         ['PROYECTADO','PEDIDO','PROD','SALDO'].map(h => (
                           <th key={`${s}_${h}`} className="px-2 py-1.5 text-center font-bold uppercase"
@@ -2740,11 +2744,19 @@ export default function PlaneacionPage() {
                           {((total) => (
                             <td className="px-2 py-1.5 text-center font-mono font-bold text-xs sticky z-10"
                               style={{ background: rowBg, left: 312, minWidth: 112,
-                                color: total > 0 ? '#2a5a8a' : '#c0ceb0',
-                                borderRight: '2px solid #8ab87a', boxShadow: '3px 0 6px rgba(0,0,0,0.08)' }}>
+                                color: total > 0 ? '#2a5a8a' : '#c0ceb0' }}>
                               {total > 0 ? total.toLocaleString('es-CO') : '—'}
                             </td>
                           ))(semanas.filter(s => s > hoyLunes).reduce((acc, s) => acc + (planData[`${ref}_${s}`]?.pedido ?? 0), 0))}
+                          {/* Total Pedido */}
+                          {((total) => (
+                            <td className="px-2 py-1.5 text-center font-mono font-bold text-xs sticky z-10"
+                              style={{ background: rowBg, left: 424, minWidth: 112,
+                                color: total > 0 ? '#7a5000' : '#c0ceb0',
+                                borderRight: '2px solid #8ab87a', boxShadow: '3px 0 6px rgba(0,0,0,0.08)' }}>
+                              {total > 0 ? total.toLocaleString('es-CO') : '—'}
+                            </td>
+                          ))(semanas.filter(s => s > hoyLunes).reduce((acc, s) => acc + (demandaOverride[`${ref}|${s}`] ?? 0), 0))}
                           {semanasVisDm.map((s, vi) => {
                             const planKey = `${ref}_${s}`
                             const demKey      = `${ref}|${s}`
