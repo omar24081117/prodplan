@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
   // Verificar que la cédula existe en personal
   const { data: persona, error: personaError } = await supabase
     .from('personal')
-    .select('cedula, nombre')
+    .select('cedula, nombre, fecha_inactivo')
     .eq('cedula', cedula)
     .eq('activo', true)
     .single()
@@ -40,6 +40,10 @@ export async function POST(request: NextRequest) {
   }
 
   const fecha = getFechaLocal()
+
+  if (persona.fecha_inactivo && fecha >= persona.fecha_inactivo) {
+    return NextResponse.json({ error: 'Empleado inactivo' }, { status: 403 })
+  }
   const hora = getHoraLocal()
   const turno = getTurno()
 

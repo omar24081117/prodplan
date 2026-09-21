@@ -9,10 +9,12 @@ export async function GET(request: NextRequest) {
   const supabase    = await createClient()
 
   // ── Todos los operarios activos (para saber la base total) ─────────────
+  const diaBase = fecha || fechaInicio || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
   const { data: personal } = await supabase
     .from('personal')
     .select('cedula, rol')
     .eq('activo', true)
+    .or(`fecha_inactivo.is.null,fecha_inactivo.gt.${diaBase}`)
 
   const rolMap: Record<string, string> = {}
   for (const p of personal ?? []) rolMap[p.cedula] = p.rol

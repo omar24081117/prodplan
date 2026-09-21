@@ -36,7 +36,7 @@ const CONTRATO_COLORS: Record<string, string> = {
   Temporal: 'bg-amber-900/50 text-amber-300',
 }
 
-type Operario = { id: string; cedula: string; nombre: string; activo: boolean; rol: Rol; rol_secundario: Rol | null; tipo_contrato: TipoContrato | null }
+type Operario = { id: string; cedula: string; nombre: string; activo: boolean; rol: Rol; rol_secundario: Rol | null; tipo_contrato: TipoContrato | null; fecha_inactivo: string | null }
 
 export default function PersonalPage() {
   const [personal, setPersonal]   = useState<Operario[]>([])
@@ -53,6 +53,9 @@ export default function PersonalPage() {
   const [esDirector, setEsDirector]               = useState(false)
   const [editandoNombre, setEditandoNombre]       = useState<string | null>(null)
   const [nombreTemp, setNombreTemp]               = useState('')
+  const [modalInactivar, setModalInactivar]       = useState<Operario | null>(null)
+  const [fechaInactivar, setFechaInactivar]       = useState('')
+  const [guardandoInactivo, setGuardandoInactivo] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -95,13 +98,31 @@ export default function PersonalPage() {
     setSaving(false)
   }
 
-  async function toggleActivo(op: Operario) {
-    const accion = op.activo ? 'desactivar' : 'activar'
-    if (!confirm(`¿${accion} a ${op.nombre}?`)) return
+  function iniciarInactivar(op: Operario) {
+    const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' })
+    setFechaInactivar(op.fecha_inactivo ?? hoy)
+    setModalInactivar(op)
+  }
+
+  async function confirmarInactivar() {
+    if (!modalInactivar || !fechaInactivar) return
+    setGuardandoInactivo(true)
+    await fetch(`/api/personal/${modalInactivar.id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ activo: false, fecha_inactivo: fechaInactivar }),
+    })
+    setModalInactivar(null)
+    setGuardandoInactivo(false)
+    cargar()
+  }
+
+  async function activar(op: Operario) {
+    if (!confirm(`¿Volver a activar a ${op.nombre}?`)) return
     await fetch(`/api/personal/${op.id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ activo: !op.activo }),
+      body: JSON.stringify({ activo: true, fecha_inactivo: null }),
     })
     cargar()
   }
@@ -404,9 +425,20 @@ export default function PersonalPage() {
                     </span>
                   </td>
                   <td className="px-4 py-2.5 text-right">
-                    <button onClick={() => toggleActivo(p)} className="text-gray-500 hover:text-white text-xs px-2 py-1 rounded hover:bg-gray-800">
-                      {p.activo ? 'Desactivar' : 'Activar'}
-                    </button>
+                    {p.activo ? (
+                      <button onClick={() => iniciarInactivar(p)} className="text-gray-500 hover:text-red-400 text-xs px-2 py-1 rounded hover:bg-gray-800">
+                        Desactivar
+                      </button>
+                    ) : (
+                      <div className="flex flex-col items-end gap-0.5">
+                        <button onClick={() => activar(p)} className="text-gray-500 hover:text-emerald-400 text-xs px-2 py-1 rounded hover:bg-gray-800">
+                          Activar
+                        </button>
+                        {p.fecha_inactivo && (
+                          <span className="text-[10px] text-gray-600">desde {p.fecha_inactivo}</span>
+                        )}
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -419,6 +451,38 @@ export default function PersonalPage() {
       <p className="text-gray-600 text-xs mt-3">
         💡 El Excel acepta columnas: <span className="text-gray-500">Cédula, Nombre, Rol, Contrato</span> (valores de Contrato: Fijo o Temporal — por defecto Fijo)
       </p>
+
+      {/* Modal inactivar */}
+      {modalInactivar && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-sm shadow-2xl">
+            <h2 className="text-white font-semibold text-base mb-1">Desactivar empleado</h2>
+            <p className="text-gray-400 text-sm mb-4">
+              <span className="text-white font-medium">{modalInactivar.nombre}</span>
+              {' '}dejará de aparecer en asistencia y nómina a partir de la fecha indicada. Los registros anteriores se conservan.
+            </p>
+            <label className="text-gray-400 text-xs block mb-1">Fecha de inactivación</label>
+            <input
+              type="date"
+              value={fechaInactivar}
+              onChange={e => setFechaInactivar(e.target.value)}
+              className="w-full bg-gray-800 border border-gray-600 text-white rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-red-500 mb-5"
+            />
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setModalInactivar(null)} className="text-gray-400 hover:text-white text-sm px-4 py-2">
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarInactivar}
+                disabled={!fechaInactivar || guardandoInactivo}
+                className="bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white text-sm font-semibold px-5 py-2 rounded-lg"
+              >
+                {guardandoInactivo ? 'Guardando...' : 'Desactivar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

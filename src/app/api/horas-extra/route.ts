@@ -49,12 +49,13 @@ export async function GET(request: NextRequest) {
   // Roles que participan en horas extra
   const ROLES_VALIDOS = ['Operario', 'Supervisor', 'Almacenista']
 
-  // Mapa de rol y tipo_contrato por cédula (solo roles válidos)
+  // Mapa de rol y tipo_contrato por cédula (solo roles válidos, excluyendo inactivos desde fecha_inactivo)
   const { data: personal } = await supabase
     .from('personal')
-    .select('cedula, rol, tipo_contrato')
+    .select('cedula, rol, tipo_contrato, fecha_inactivo')
     .in('rol', ROLES_VALIDOS)
     .eq('activo', true)
+    .or(`fecha_inactivo.is.null,fecha_inactivo.gt.${fecha}`)
 
   const rolMap: Record<string, string> = {}
   const contratoMap: Record<string, string> = {}
