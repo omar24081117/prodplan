@@ -61,6 +61,28 @@ export async function POST(request: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Auto-aprobar si se asigna cualquier recargo o horas nocturnas
+  const tieneRecargo = (
+    (recargo_diurno_manual   != null && Number(recargo_diurno_manual)   > 0) ||
+    (recargo_nocturno_manual != null && Number(recargo_nocturno_manual) > 0) ||
+    (horas_nocturnas_manual  != null && Number(horas_nocturnas_manual)  > 0)
+  )
+  if (tieneRecargo) {
+    await supabase
+      .from('horas_extra_aprobaciones')
+      .upsert({
+        cedula,
+        fecha,
+        aprobado_por_cedula:  configurado_por_cedula ?? 'SISTEMA',
+        aprobado_por_nombre:  configurado_por_nombre ?? 'Sistema',
+        aprobado_en:          new Date().toISOString(),
+        rechazado:            false,
+        rechazado_por_nombre: null,
+        rechazado_en:         null,
+      }, { onConflict: 'cedula,fecha' })
+  }
+
   return NextResponse.json(data)
 }
 
