@@ -69,7 +69,8 @@ export async function POST(request: NextRequest) {
     (horas_nocturnas_manual  != null && Number(horas_nocturnas_manual)  > 0)
   )
   if (tieneRecargo) {
-    await supabase
+    const admin = createAdminClient()
+    await admin
       .from('horas_extra_aprobaciones')
       .upsert({
         cedula,
