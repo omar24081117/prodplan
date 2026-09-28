@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
   // Overrides del admin (correcciones manuales y jornadas adicionales)
   const { data: overrides } = await supabase
     .from('horas_extra_overrides')
-    .select('fecha, hora_ingreso, salida_efectiva, horas_extra_manual, horas_nocturnas_manual, recargo_nocturno_manual')
+    .select('fecha, hora_ingreso, salida_efectiva, horas_extra_manual, horas_nocturnas_manual, recargo_nocturno_manual, recargo_diurno_manual')
     .eq('cedula', empleado.cedula)
     .gte('fecha', fechaInicio)
     .lte('fecha', fechaFin)
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
   }
 
   // Mapa de overrides por fecha
-  const ovMap: Record<string, { hora_ingreso: string | null; salida_efectiva: string | null; horas_extra_manual: number | null; horas_nocturnas_manual: number | null; recargo_nocturno_manual: number | null }> = {}
+  const ovMap: Record<string, { hora_ingreso: string | null; salida_efectiva: string | null; horas_extra_manual: number | null; horas_nocturnas_manual: number | null; recargo_nocturno_manual: number | null; recargo_diurno_manual: number | null }> = {}
   for (const ov of overrides ?? []) {
     ovMap[ov.fecha] = {
       hora_ingreso:            ov.hora_ingreso            ?? null,
@@ -80,6 +80,7 @@ export async function GET(request: NextRequest) {
       horas_extra_manual:      typeof ov.horas_extra_manual      === 'number' ? ov.horas_extra_manual      : null,
       horas_nocturnas_manual:  typeof ov.horas_nocturnas_manual  === 'number' ? ov.horas_nocturnas_manual  : null,
       recargo_nocturno_manual: typeof ov.recargo_nocturno_manual === 'number' ? ov.recargo_nocturno_manual : null,
+      recargo_diurno_manual:   typeof ov.recargo_diurno_manual   === 'number' ? ov.recargo_diurno_manual   : null,
     }
   }
 
@@ -110,6 +111,7 @@ export async function GET(request: NextRequest) {
           horas_extra:          ov!.horas_extra_manual ?? 0,
           horas_nocturnas:      ov!.horas_nocturnas_manual ?? 0,
           horas_recargo:        ov!.recargo_nocturno_manual ?? 0,
+          recargo_diurno:       ov!.recargo_diurno_manual ?? 0,
           aprobado:             esAprobado,
           rechazado:            esRechazado,
           aprobado_por_nombre:  esAprobado ? (apro?.aprobado_por_nombre ?? null) : null,
@@ -159,13 +161,14 @@ export async function GET(request: NextRequest) {
         horas_extra:          horasExtra,
         horas_nocturnas:      0,
         horas_recargo:        horasRecargo,
+        recargo_diurno:       ov?.recargo_diurno_manual ?? 0,
         aprobado:             esAprobado,
         rechazado:            esRechazado,
         aprobado_por_nombre:  esAprobado ? (apro?.aprobado_por_nombre ?? null) : null,
         es_jornada_adicional: false,
       }
     })
-    .filter(r => r.minutos_extra > 0 || r.horas_recargo > 0 || r.horas_nocturnas > 0 || r.aprobado || r.rechazado)
+    .filter(r => r.minutos_extra > 0 || r.horas_recargo > 0 || r.horas_nocturnas > 0 || r.recargo_diurno > 0 || r.aprobado || r.rechazado)
 
   // Registros aprobados sin asistencia (override o registro manual)
   const registrosSinAsistencia = fechasAprobadas.map(fecha => {
@@ -183,6 +186,7 @@ export async function GET(request: NextRequest) {
       horas_extra:          ov?.horas_extra_manual      ?? 0,
       horas_nocturnas:      ov?.horas_nocturnas_manual  ?? 0,
       horas_recargo:        ov?.recargo_nocturno_manual ?? 0,
+      recargo_diurno:       ov?.recargo_diurno_manual   ?? 0,
       aprobado:             !apro.rechazado,
       rechazado:            apro.rechazado,
       aprobado_por_nombre:  !apro.rechazado ? (apro.aprobado_por_nombre ?? null) : null,
@@ -196,10 +200,11 @@ export async function GET(request: NextRequest) {
   // Totales: extra de aprobados, recargo de todos
   const aprobados = registros.filter(r => r.aprobado)
   const totales = {
-    minutos_extra:  aprobados.reduce((s, r) => s + r.minutos_extra, 0),
-    horas_extra:    Math.round(aprobados.reduce((s, r) => s + r.horas_extra, 0) * 100) / 100,
-    horas_recargo:  Math.round(registros.reduce((s, r) => s + r.horas_recargo, 0) * 100) / 100,
-    dias_aprobados: aprobados.length,
+    minutos_extra:   aprobados.reduce((s, r) => s + r.minutos_extra, 0),
+    horas_extra:     Math.round(aprobados.reduce((s, r) => s + r.horas_extra, 0) * 100) / 100,
+    horas_recargo:   Math.round(registros.reduce((s, r) => s + r.horas_recargo, 0) * 100) / 100,
+    recargo_diurno:  Math.round(registros.reduce((s, r) => s + (r.recargo_diurno ?? 0), 0) * 100) / 100,
+    dias_aprobados:  aprobados.length,
   }
 
   return NextResponse.json({ empleado, registros, fecha_inicio: fechaInicio, fecha_fin: fechaFin, totales })

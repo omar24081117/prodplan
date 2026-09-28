@@ -16,6 +16,7 @@ type RegistroDia = {
   horas_extra: number
   horas_nocturnas: number
   horas_recargo: number
+  recargo_diurno: number
   aprobado: boolean
   rechazado: boolean
   aprobado_por_nombre: string | null
@@ -27,6 +28,7 @@ type Totales = {
   horas_extra: number
   horas_nocturnas?: number
   horas_recargo: number
+  recargo_diurno: number
   dias_aprobados: number
 }
 
@@ -64,7 +66,7 @@ export default function MisHorasPage() {
       if (!res.ok) { setError(data.error || 'Error'); return }
       setEmpleado(data.empleado)
       // Solo aprobados
-      setRegistros((data.registros as RegistroDia[]).filter(r => r.aprobado || r.horas_recargo > 0 || (r.horas_nocturnas ?? 0) > 0))
+      setRegistros((data.registros as RegistroDia[]).filter(r => r.aprobado || r.horas_recargo > 0 || (r.horas_nocturnas ?? 0) > 0 || (r.recargo_diurno ?? 0) > 0))
       setTotales(data.totales)
     } catch {
       setError('Error de conexión')
@@ -80,7 +82,7 @@ export default function MisHorasPage() {
     const res  = await fetch(`/api/horas-extra/personal?cedula=${empleado.cedula}&fecha_inicio=${fechaInicio}&fecha_fin=${fechaFin}`)
     const data = await res.json()
     if (res.ok) {
-      setRegistros((data.registros as RegistroDia[]).filter(r => r.aprobado || r.horas_recargo > 0 || (r.horas_nocturnas ?? 0) > 0))
+      setRegistros((data.registros as RegistroDia[]).filter(r => r.aprobado || r.horas_recargo > 0 || (r.horas_nocturnas ?? 0) > 0 || (r.recargo_diurno ?? 0) > 0))
       setTotales(data.totales)
     }
     setBuscando(false)
@@ -139,10 +141,11 @@ export default function MisHorasPage() {
   }
 
   const aprobados = registros // ya filtrados
-  const totalMinutos   = totales?.minutos_extra  ?? 0
-  const totalHoras     = totales?.horas_extra    ?? 0
-  const totalNocturnas = registros.reduce((s, r) => s + (r.horas_nocturnas ?? 0), 0)
-  const totalRecargo   = totales?.horas_recargo  ?? 0
+  const totalMinutos      = totales?.minutos_extra   ?? 0
+  const totalHoras        = totales?.horas_extra     ?? 0
+  const totalNocturnas    = registros.reduce((s, r) => s + (r.horas_nocturnas ?? 0), 0)
+  const totalRecargo      = totales?.horas_recargo   ?? 0
+  const totalRecargoDiurno = totales?.recargo_diurno ?? 0
 
   /* ── Reporte ── */
   return (
@@ -212,6 +215,11 @@ export default function MisHorasPage() {
             <p className="text-3xl font-bold" style={{ color: totalRecargo > 0 ? '#fca5a5' : '#475569' }}>{totalRecargo.toFixed(2)}</p>
             <p className="text-xs mt-0.5" style={{ color: totalRecargo > 0 ? '#7f1d1d' : '#374151' }}>horas calculadas</p>
           </div>
+          <div className="rounded-xl p-4 text-center" style={{ background: totalRecargoDiurno > 0 ? '#0a1a05' : '#111827', border: `1px solid ${totalRecargoDiurno > 0 ? '#1a3a0a' : '#1f2937'}` }}>
+            <p className="text-gray-500 text-xs mb-1">Recargo diurno</p>
+            <p className="text-3xl font-bold" style={{ color: totalRecargoDiurno > 0 ? '#86efac' : '#475569' }}>{totalRecargoDiurno.toFixed(2)}</p>
+            <p className="text-xs mt-0.5" style={{ color: totalRecargoDiurno > 0 ? '#14532d' : '#374151' }}>horas calculadas</p>
+          </div>
         </div>
 
         {/* Tabla */}
@@ -230,7 +238,7 @@ export default function MisHorasPage() {
             <table className="w-full text-sm min-w-[600px]">
               <thead>
                 <tr style={{ background: '#020617', borderBottom: '2px solid #1e293b' }}>
-                  {['FECHA','TURNO','ENTRADA','SALIDA REAL','S. NORM','S. EFECTIVA','MIN EXTRA','HRS EXTRA','HRS NOC.','RECARGO NOCT.'].map(h => (
+                  {['FECHA','TURNO','ENTRADA','SALIDA REAL','S. NORM','S. EFECTIVA','MIN EXTRA','HRS EXTRA','HRS NOC.','RECARGO NOCT.','REC. DÍA'].map(h => (
                     <th key={h} className="px-4 py-3 text-left text-xs font-bold uppercase tracking-wider whitespace-nowrap"
                       style={{ color: '#94a3b8' }}>{h}</th>
                   ))}
@@ -328,6 +336,16 @@ export default function MisHorasPage() {
                         </span>
                       ) : <span className="text-gray-700 text-xs">—</span>}
                     </td>
+
+                    {/* REC. DÍA */}
+                    <td className="px-4 py-3">
+                      {(r.recargo_diurno ?? 0) > 0 ? (
+                        <span className="inline-block px-2 py-0.5 rounded text-xs font-bold"
+                          style={{ background: '#052e16', color: '#86efac' }}>
+                          {(r.recargo_diurno ?? 0).toFixed(2)} h
+                        </span>
+                      ) : <span className="text-gray-700 text-xs">—</span>}
+                    </td>
                   </tr>
                   )
                 })}
@@ -367,6 +385,14 @@ export default function MisHorasPage() {
                       </span>
                     ) : <span className="text-gray-700 text-xs">—</span>}
                   </td>
+                  <td className="px-4 py-3">
+                    {totalRecargoDiurno > 0 ? (
+                      <span className="inline-block px-2 py-0.5 rounded text-xs font-bold"
+                        style={{ background: '#052e16', color: '#86efac' }}>
+                        {totalRecargoDiurno.toFixed(2)} h
+                      </span>
+                    ) : <span className="text-gray-700 text-xs">—</span>}
+                  </td>
                 </tr>
               </tfoot>
             </table>
@@ -374,7 +400,7 @@ export default function MisHorasPage() {
         )}
 
         <p className="text-center text-gray-700 text-xs mt-4">
-          ✓ Horas extra aprobadas &nbsp;·&nbsp; <span style={{ color: '#c4b5fd' }}>◐</span> Horas nocturnas &nbsp;·&nbsp; <span style={{ color: '#fca5a5' }}>◐</span> Recargo nocturno
+          ✓ Horas extra aprobadas &nbsp;·&nbsp; <span style={{ color: '#c4b5fd' }}>◐</span> Horas nocturnas &nbsp;·&nbsp; <span style={{ color: '#fca5a5' }}>◐</span> Recargo nocturno &nbsp;·&nbsp; <span style={{ color: '#86efac' }}>◐</span> Recargo diurno
         </p>
       </div>
     </main>
