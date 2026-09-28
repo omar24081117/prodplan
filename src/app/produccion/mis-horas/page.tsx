@@ -194,7 +194,7 @@ export default function MisHorasPage() {
         </form>
 
         {/* Totales aprobados */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-5">
           <div className="rounded-xl p-4 text-center" style={{ background: '#1a1200', border: '1px solid #2a2000' }}>
             <p className="text-gray-500 text-xs mb-1">Minutos extra</p>
             <p className="text-3xl font-bold" style={{ color: '#fdba74' }}>{totalMinutos}</p>
