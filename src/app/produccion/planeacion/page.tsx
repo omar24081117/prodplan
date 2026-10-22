@@ -82,15 +82,19 @@ function getMonthLabel(iso: string): string {
 }
 
 function generateSemanas(): string[] {
-  // All Mondays of the current year (Jan → Dec)
+  // Mondays of the current year + first 10 weeks of next year
   const year = new Date().getFullYear()
   const semanas: string[] = []
-  // Find the first Monday of the year (or last Monday of Dec prior)
   const jan1 = new Date(year, 0, 1)
   let monday = getMonday(jan1)
-  // If that Monday is in the previous year, advance one week
   if (monday.getFullYear() < year) monday = new Date(monday.getTime() + 7 * 86400 * 1000)
+  // Current year
   while (monday.getFullYear() === year) {
+    semanas.push(toISO(monday))
+    monday = new Date(monday.getTime() + 7 * 86400 * 1000)
+  }
+  // First 10 weeks of next year
+  for (let i = 0; i < 10; i++) {
     semanas.push(toISO(monday))
     monday = new Date(monday.getTime() + 7 * 86400 * 1000)
   }
