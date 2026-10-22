@@ -1761,7 +1761,7 @@ export default function PlaneacionPage() {
             <div className="flex items-center gap-3 mb-4 flex-wrap">
               <h2 className="font-bold text-sm" style={{ color: '#1e3a14' }}>FORECAST</h2>
               <span className="text-xs" style={{ color: '#6a8a50' }}>
-                {new Date().getFullYear()} · {semanas.length} semanas
+                {new Date().getFullYear()}–{new Date().getFullYear() + 1} · {semanas.length} semanas
               </span>
               {/* Buscador */}
               <div className="relative flex items-center" style={{ minWidth: 220 }}>
