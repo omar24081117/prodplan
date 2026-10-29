@@ -47,11 +47,12 @@ type Registro = {
 type Override = {
   hora_ingreso: string
   salida_efectiva: string
-  horas_extra_manual?: number      // Horas extra diurnas manuales
-  horas_nocturnas_manual?: number  // Horas extra nocturnas manuales
-  recargo_nocturno_manual?: number // Recargo nocturno manual adicional
-  recargo_diurno_manual?: number   // Recargo diurno manual adicional
-  minutos_alimentacion?: number    // Minutos de pausa alimentación a descontar
+  horas_extra_manual?: number
+  horas_nocturnas_manual?: number
+  recargo_nocturno_manual?: number
+  recargo_diurno_manual?: number
+  minutos_alimentacion?: number
+  es_dominical?: boolean
 }
 
 const toMins = (t: string) => {
@@ -136,6 +137,7 @@ function TurnoManualModal({
   const [hsRecNocManual,  setHsRecNocManual]  = useState(overrideActual?.recargo_nocturno_manual?.toString() ?? '')
   const [hsRecDiurManual, setHsRecDiurManual] = useState(overrideActual?.recargo_diurno_manual?.toString() ?? '')
   const [minAlim,         setMinAlim]         = useState(overrideActual?.minutos_alimentacion?.toString() ?? '')
+  const [esDominical,     setEsDominical]     = useState(overrideActual?.es_dominical ?? false)
 
   const previewHorario = modo === 'horario' && salidaEfec && (registro.salida_norm || registro.dia_libre)
     ? calcConOverride(registro, { hora_ingreso: horaIngreso, salida_efectiva: salidaEfec, minutos_alimentacion: parseInt(minAlim) || 0 })
@@ -163,9 +165,10 @@ function TurnoManualModal({
         recargo_nocturno_manual: parseFloat(hsRecNocManual)  || undefined,
         recargo_diurno_manual:   parseFloat(hsRecDiurManual) || undefined,
         minutos_alimentacion:    alim,
+        es_dominical:            esDominical,
       })
     } else {
-      onGuardar(registro.cedula, { hora_ingreso: horaIngreso, salida_efectiva: salidaEfec, minutos_alimentacion: alim })
+      onGuardar(registro.cedula, { hora_ingreso: horaIngreso, salida_efectiva: salidaEfec, minutos_alimentacion: alim, es_dominical: esDominical })
     }
     onClose()
   }
@@ -233,6 +236,7 @@ function TurnoManualModal({
                     horas_nocturnas_manual: 0,
                     recargo_nocturno_manual: 0,
                     recargo_diurno_manual: 0,
+                    es_dominical: false,
                   })
                   onClose()
                 }}
@@ -393,6 +397,17 @@ function TurnoManualModal({
               </div>
             </div>
           )}
+
+          {/* Dominical / Festivo */}
+          <label className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg cursor-pointer select-none"
+            style={{ background: esDominical ? 'rgba(34,197,94,0.12)' : '#1f2937', border: `1px solid ${esDominical ? '#16a34a' : '#374151'}` }}>
+            <input type="checkbox" checked={esDominical} onChange={e => setEsDominical(e.target.checked)}
+              className="w-4 h-4 rounded accent-green-500" />
+            <div>
+              <p className="text-xs font-bold" style={{ color: esDominical ? '#4ade80' : '#9ca3af' }}>Jornada Dominical / Festivo</p>
+              <p className="text-xs" style={{ color: '#6b7280' }}>Marca este día como dominical o festivo trabajado</p>
+            </div>
+          </label>
 
           <div className="flex gap-2 mt-1">
             <button type="button" onClick={onClose}
@@ -734,7 +749,7 @@ export default function HorasExtraPage() {
     // Overrides guardados
     const ovMap: Record<string, Override> = {}
     for (const ov of dataOv) {
-      if (ov.hora_ingreso || ov.salida_efectiva || ov.horas_extra_manual != null || ov.horas_nocturnas_manual || ov.minutos_alimentacion) {
+      if (ov.hora_ingreso || ov.salida_efectiva || ov.horas_extra_manual != null || ov.horas_nocturnas_manual || ov.minutos_alimentacion || ov.es_dominical) {
         ovMap[ov.cedula] = {
           hora_ingreso:            ov.hora_ingreso            ?? '',
           salida_efectiva:         ov.salida_efectiva         ?? '',
@@ -743,6 +758,7 @@ export default function HorasExtraPage() {
           recargo_nocturno_manual: ov.recargo_nocturno_manual ?? undefined,
           recargo_diurno_manual:   ov.recargo_diurno_manual   ?? undefined,
           minutos_alimentacion:    ov.minutos_alimentacion    ?? undefined,
+          es_dominical:            ov.es_dominical            ?? false,
         }
       }
     }
@@ -1059,13 +1075,17 @@ export default function HorasExtraPage() {
 
                     {/* TURNO */}
                     <td className="px-2 py-2">
-                      {r.dia_libre ? (
-                        <span className="font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgba(234,179,8,0.2)', color: '#fbbf24', fontSize:'0.6rem' }}>LIBRE</span>
-                      ) : overrides[r.cedula] ? (
-                        <span className="font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgba(14,116,144,0.3)', color: '#67e8f9', fontSize:'0.6rem' }}>MAN</span>
-                      ) : r.turno ? (
-                        <span className={`font-bold px-1.5 py-0.5 rounded ${r.turno === 'T1' ? 'bg-blue-900/50 text-blue-300' : 'bg-purple-900/50 text-purple-300'}`}>{r.turno}</span>
-                      ) : <span className="text-slate-700">—</span>}
+                      <div className="flex flex-col gap-0.5">
+                        {r.dia_libre ? (
+                          <span className="font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgba(234,179,8,0.2)', color: '#fbbf24', fontSize:'0.6rem' }}>LIBRE</span>
+                        ) : overrides[r.cedula]?.es_dominical ? (
+                          <span className="font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgba(34,197,94,0.2)', color: '#4ade80', fontSize:'0.6rem' }}>DOM</span>
+                        ) : overrides[r.cedula] ? (
+                          <span className="font-bold px-1.5 py-0.5 rounded" style={{ background: 'rgba(14,116,144,0.3)', color: '#67e8f9', fontSize:'0.6rem' }}>MAN</span>
+                        ) : r.turno ? (
+                          <span className={`font-bold px-1.5 py-0.5 rounded ${r.turno === 'T1' ? 'bg-blue-900/50 text-blue-300' : 'bg-purple-900/50 text-purple-300'}`}>{r.turno}</span>
+                        ) : <span className="text-slate-700">—</span>}
+                      </div>
                     </td>
 
                     {/* ENT. REAL */}
@@ -1327,6 +1347,7 @@ export default function HorasExtraPage() {
                 recargo_nocturno_manual: ov.recargo_nocturno_manual ?? null,
                 recargo_diurno_manual:   ov.recargo_diurno_manual   ?? null,
                 minutos_alimentacion:    ov.minutos_alimentacion    ?? null,
+                es_dominical:            ov.es_dominical             ?? false,
               }),
             })
             if (!res.ok) {
