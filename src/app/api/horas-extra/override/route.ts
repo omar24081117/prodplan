@@ -63,11 +63,12 @@ export async function POST(request: NextRequest) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Auto-aprobar si se asigna cualquier recargo o horas nocturnas
+  // Auto-aprobar si se asigna cualquier recargo, horas nocturnas o jornada dominical
   const tieneRecargo = (
     (recargo_diurno_manual   != null && Number(recargo_diurno_manual)   > 0) ||
     (recargo_nocturno_manual != null && Number(recargo_nocturno_manual) > 0) ||
-    (horas_nocturnas_manual  != null && Number(horas_nocturnas_manual)  > 0)
+    (horas_nocturnas_manual  != null && Number(horas_nocturnas_manual)  > 0) ||
+    (es_dominical === true || es_dominical === 'true')
   )
   if (tieneRecargo) {
     const admin = createAdminClient()
