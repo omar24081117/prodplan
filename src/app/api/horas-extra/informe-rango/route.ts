@@ -86,7 +86,7 @@ export async function GET(req: NextRequest) {
       .order('fecha', { ascending: true }),
     supabase
       .from('horas_extra_overrides')
-      .select('cedula, fecha, hora_ingreso, salida_efectiva, horas_extra_manual, horas_nocturnas_manual, recargo_nocturno_manual, recargo_diurno_manual, configurado_por_nombre')
+      .select('cedula, fecha, hora_ingreso, salida_efectiva, horas_extra_manual, horas_nocturnas_manual, recargo_nocturno_manual, recargo_diurno_manual, es_dominical, configurado_por_nombre')
       .gte('fecha', desde)
       .lte('fecha', hasta),
     supabase
@@ -111,6 +111,7 @@ export async function GET(req: NextRequest) {
     horas_nocturnas_manual: number | null
     recargo_nocturno_manual: number | null
     recargo_diurno_manual: number | null
+    es_dominical: boolean
     configurado_por_nombre: string | null
   }> = {}
   for (const ov of overrides ?? []) {
@@ -121,6 +122,7 @@ export async function GET(req: NextRequest) {
       horas_nocturnas_manual:  ov.horas_nocturnas_manual  ?? null,
       recargo_nocturno_manual: ov.recargo_nocturno_manual ?? null,
       recargo_diurno_manual:   ov.recargo_diurno_manual   ?? null,
+      es_dominical:            ov.es_dominical            ?? false,
       configurado_por_nombre:  ov.configurado_por_nombre  ?? null,
     }
   }
@@ -128,8 +130,8 @@ export async function GET(req: NextRequest) {
   const aproMap: Record<string, { aprobado_por_nombre: string; rechazado: boolean }> = {}
   for (const a of apros ?? []) aproMap[`${a.cedula}_${a.fecha}`] = a
 
-  type DetalleRow = { fecha: string; hrsExtra: number; hrsNoc: number; recargo: number; recargoDiurno: number; estado: string; aprobadoPor?: string }
-  type PersonaRow = { cedula: string; nombre: string; contrato: string; rol: string; hrsExtra: number; hrsNoc: number; recargo: number; recargoDiurno: number; aprobadas: number; pendientes: number; rechazadas: number; detalle: DetalleRow[] }
+  type DetalleRow = { fecha: string; hrsExtra: number; hrsNoc: number; recargo: number; recargoDiurno: number; dominical: boolean; estado: string; aprobadoPor?: string }
+  type PersonaRow = { cedula: string; nombre: string; contrato: string; rol: string; hrsExtra: number; hrsNoc: number; recargo: number; recargoDiurno: number; diasDominical: number; aprobadas: number; pendientes: number; rechazadas: number; detalle: DetalleRow[] }
 
   const personaMap: Record<string, PersonaRow> = {}
   const asistSet = new Set<string>()
@@ -147,6 +149,7 @@ export async function GET(req: NextRequest) {
     const contrato = info?.contrato ?? 'Fijo'
 
     let hrsExtra: number, hrsNoc: number, recargo: number, recargoDiurno: number
+    const esDominical = ov?.es_dominical ?? false
 
     const hasManualExtended = ov && (
       (ov.horas_nocturnas_manual  != null && Number(ov.horas_nocturnas_manual)  > 0) ||
@@ -172,10 +175,10 @@ export async function GET(req: NextRequest) {
       recargoDiurno = 0
     }
 
-    if (hrsExtra === 0 && hrsNoc === 0 && recargo === 0 && recargoDiurno === 0) continue
+    if (!esDominical && hrsExtra === 0 && hrsNoc === 0 && recargo === 0 && recargoDiurno === 0) continue
 
     const estado = apro ? (apro.rechazado ? 'Rechazado' : 'Aprobado') : 'Pendiente'
-    if (estado !== 'Aprobado') continue
+    if (estado !== 'Aprobado' && !esDominical) continue
 
     if (!personaMap[cedKey]) {
       personaMap[cedKey] = {
@@ -183,7 +186,7 @@ export async function GET(req: NextRequest) {
         nombre: info?.nombre ?? a.nombre ?? cedKey,
         contrato,
         rol,
-        hrsExtra: 0, hrsNoc: 0, recargo: 0, recargoDiurno: 0,
+        hrsExtra: 0, hrsNoc: 0, recargo: 0, recargoDiurno: 0, diasDominical: 0,
         aprobadas: 0, pendientes: 0, rechazadas: 0,
         detalle: [],
       }
@@ -194,8 +197,9 @@ export async function GET(req: NextRequest) {
     p.hrsNoc        += hrsNoc
     p.recargo       += recargo
     p.recargoDiurno += recargoDiurno
+    if (esDominical) p.diasDominical++
     p.aprobadas++
-    p.detalle.push({ fecha: a.fecha, hrsExtra, hrsNoc, recargo, recargoDiurno, estado, aprobadoPor: apro?.aprobado_por_nombre })
+    p.detalle.push({ fecha: a.fecha, hrsExtra, hrsNoc, recargo, recargoDiurno, dominical: esDominical, estado, aprobadoPor: apro?.aprobado_por_nombre })
   }
 
   // Overrides sin asistencia ese día (entradas manuales puras)
@@ -207,11 +211,12 @@ export async function GET(req: NextRequest) {
     const hrsNoc        = Number(ov.horas_nocturnas_manual  ?? 0)
     const recargo       = Number(ov.recargo_nocturno_manual ?? 0)
     const recargoDiurno = Number(ov.recargo_diurno_manual   ?? 0)
-    if (hrsExtra === 0 && hrsNoc === 0 && recargo === 0 && recargoDiurno === 0) continue
+    const esDominical   = ov.es_dominical ?? false
+    if (!esDominical && hrsExtra === 0 && hrsNoc === 0 && recargo === 0 && recargoDiurno === 0) continue
 
     const apro   = aproMap[key]
     const estado = apro ? (apro.rechazado ? 'Rechazado' : 'Aprobado') : 'Pendiente'
-    if (estado !== 'Aprobado') continue
+    if (estado !== 'Aprobado' && !esDominical) continue
 
     const cedKey = String(ov.cedula)
     const info   = nombreMap[cedKey]
@@ -222,7 +227,7 @@ export async function GET(req: NextRequest) {
         nombre: info?.nombre ?? ov.configurado_por_nombre ?? cedKey,
         contrato: info?.contrato ?? 'Fijo',
         rol: info?.rol ?? 'Operario',
-        hrsExtra: 0, hrsNoc: 0, recargo: 0, recargoDiurno: 0,
+        hrsExtra: 0, hrsNoc: 0, recargo: 0, recargoDiurno: 0, diasDominical: 0,
         aprobadas: 0, pendientes: 0, rechazadas: 0,
         detalle: [],
       }
@@ -233,21 +238,23 @@ export async function GET(req: NextRequest) {
     p.hrsNoc        += hrsNoc
     p.recargo       += recargo
     p.recargoDiurno += recargoDiurno
+    if (esDominical) p.diasDominical++
     p.aprobadas++
-    p.detalle.push({ fecha: ov.fecha, hrsExtra, hrsNoc, recargo, recargoDiurno, estado, aprobadoPor: apro?.aprobado_por_nombre })
+    p.detalle.push({ fecha: ov.fecha, hrsExtra, hrsNoc, recargo, recargoDiurno, dominical: esDominical, estado, aprobadoPor: apro?.aprobado_por_nombre })
   }
 
   const personas = Object.values(personaMap).sort((a, b) => a.nombre.localeCompare(b.nombre))
 
   const totales = personas.reduce((acc, p) => ({
-    hrsExtra:      acc.hrsExtra      + p.hrsExtra,
-    hrsNoc:        acc.hrsNoc        + p.hrsNoc,
-    recargo:       acc.recargo       + p.recargo,
-    recargoDiurno: acc.recargoDiurno + p.recargoDiurno,
-    aprobadas:     acc.aprobadas     + p.aprobadas,
-    pendientes:    acc.pendientes    + p.pendientes,
-    rechazadas:    acc.rechazadas    + p.rechazadas,
-  }), { hrsExtra: 0, hrsNoc: 0, recargo: 0, recargoDiurno: 0, aprobadas: 0, pendientes: 0, rechazadas: 0 })
+    hrsExtra:       acc.hrsExtra       + p.hrsExtra,
+    hrsNoc:         acc.hrsNoc         + p.hrsNoc,
+    recargo:        acc.recargo        + p.recargo,
+    recargoDiurno:  acc.recargoDiurno  + p.recargoDiurno,
+    diasDominical:  acc.diasDominical  + p.diasDominical,
+    aprobadas:      acc.aprobadas      + p.aprobadas,
+    pendientes:     acc.pendientes     + p.pendientes,
+    rechazadas:     acc.rechazadas     + p.rechazadas,
+  }), { hrsExtra: 0, hrsNoc: 0, recargo: 0, recargoDiurno: 0, diasDominical: 0, aprobadas: 0, pendientes: 0, rechazadas: 0 })
 
   return NextResponse.json({ totales, personas })
 }
