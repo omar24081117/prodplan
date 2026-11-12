@@ -135,11 +135,19 @@ export async function GET(req: NextRequest) {
   const asistSet = new Set<string>()
 
   for (const a of asistencias ?? []) {
-    if (!a.hora_ingreso) continue
-
     const key      = `${a.cedula}_${a.fecha}`
     asistSet.add(key)
     const ov       = ovMap[key]
+
+    const hasManualExtended = ov && (
+      (ov.horas_nocturnas_manual  != null && Number(ov.horas_nocturnas_manual)  > 0) ||
+      (ov.recargo_nocturno_manual != null && Number(ov.recargo_nocturno_manual) > 0) ||
+      (ov.recargo_diurno_manual   != null && Number(ov.recargo_diurno_manual)   > 0)
+    )
+
+    // Si no hay hora de ingreso y tampoco override manual extendido, no hay nada que reportar
+    if (!a.hora_ingreso && !hasManualExtended) continue
+
     const apro     = aproMap[key]
     const cedKey   = String(a.cedula)
     const info     = nombreMap[cedKey]
@@ -147,12 +155,6 @@ export async function GET(req: NextRequest) {
     const contrato = info?.contrato ?? 'Fijo'
 
     let hrsExtra: number, hrsNoc: number, recargo: number, recargoDiurno: number
-
-    const hasManualExtended = ov && (
-      (ov.horas_nocturnas_manual  != null && Number(ov.horas_nocturnas_manual)  > 0) ||
-      (ov.recargo_nocturno_manual != null && Number(ov.recargo_nocturno_manual) > 0) ||
-      (ov.recargo_diurno_manual   != null && Number(ov.recargo_diurno_manual)   > 0)
-    )
 
     if (hasManualExtended) {
       hrsExtra      = Number(ov.horas_extra_manual      ?? 0)
