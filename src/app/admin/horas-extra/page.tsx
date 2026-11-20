@@ -749,7 +749,7 @@ export default function HorasExtraPage() {
     // Overrides guardados
     const ovMap: Record<string, Override> = {}
     for (const ov of dataOv) {
-      if (ov.hora_ingreso || ov.salida_efectiva || ov.horas_extra_manual != null || ov.horas_nocturnas_manual || ov.minutos_alimentacion || ov.es_dominical) {
+      if (ov.hora_ingreso || ov.salida_efectiva || ov.horas_extra_manual != null || ov.horas_nocturnas_manual || ov.recargo_nocturno_manual || ov.recargo_diurno_manual || ov.minutos_alimentacion || ov.es_dominical) {
         ovMap[ov.cedula] = {
           hora_ingreso:            ov.hora_ingreso            ?? '',
           salida_efectiva:         ov.salida_efectiva         ?? '',

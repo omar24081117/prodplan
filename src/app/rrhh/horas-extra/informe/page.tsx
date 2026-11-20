@@ -74,10 +74,10 @@ export default function RRHHInformeRangoPage() {
   }
 
   function descargarCSV() {
-    const filas: string[] = ['Nombre,Rol,Contrato,Cédula,Fecha,HRS+,HRS NOC,REC NOC,REC DIA,Dominical,Estado,Aprobado por']
+    const filas: string[] = ['Nombre,Rol,Contrato,Cédula,Fecha,HRS+,HRS NOC,REC NOC,REC DIA,Dom/Fest,Estado,Aprobado por']
     for (const p of personas) {
       for (const d of p.detalle) {
-        filas.push([p.nombre, p.rol, p.contrato, p.cedula, d.fecha, d.hrsExtra, d.hrsNoc, d.recargo, d.recargoDiurno, d.dominical ? 'Si' : '', d.estado, d.aprobadoPor ?? ''].join(','))
+        filas.push([p.nombre, p.rol, p.contrato, p.cedula, d.fecha, d.hrsExtra, d.hrsNoc, d.recargo, d.recargoDiurno, d.dominical ? 'Sí' : '', d.estado, d.aprobadoPor ?? ''].join(','))
       }
     }
     const blob = new Blob([filas.join('\n')], { type: 'text/csv;charset=utf-8;' })
@@ -132,19 +132,24 @@ export default function RRHHInformeRangoPage() {
       {/* Cards de totales */}
       {totales && (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
             {[
-              { label: 'Total HRS+',    value: fmt(totales.hrsExtra),       color: '#f97316' },
-              { label: 'Total HRS NOC', value: fmt(totales.hrsNoc),         color: '#818cf8' },
-              { label: 'Total REC NOC', value: fmt(totales.recargo),        color: '#60a5fa' },
-              { label: 'Total REC DIA', value: fmt(totales.recargoDiurno),  color: '#34d399' },
+              { label: 'Total HRS+',    value: fmt(totales.hrsExtra),       color: '#f97316', sub: 'horas' },
+              { label: 'Total HRS NOC', value: fmt(totales.hrsNoc),         color: '#818cf8', sub: 'horas' },
+              { label: 'Total REC NOC', value: fmt(totales.recargo),        color: '#60a5fa', sub: 'horas' },
+              { label: 'Total REC DIA', value: fmt(totales.recargoDiurno),  color: '#34d399', sub: 'horas' },
             ].map(c => (
               <div key={c.label} className="rounded-xl p-4" style={{ background: '#111827', border: '1px solid #1e293b' }}>
                 <p className="text-xs text-gray-500 mb-1">{c.label}</p>
                 <p className="text-2xl font-bold" style={{ color: c.color }}>{c.value}</p>
-                <p className="text-xs text-gray-600">horas</p>
+                <p className="text-xs text-gray-600">{c.sub}</p>
               </div>
             ))}
+            <div className="rounded-xl p-4" style={{ background: '#052e1a', border: '1px solid #16a34a' }}>
+              <p className="text-xs mb-1" style={{ color: '#4ade80' }}>Total DOM/FEST</p>
+              <p className="text-2xl font-bold" style={{ color: '#86efac' }}>{totales.diasDominical ?? 0}</p>
+              <p className="text-xs text-gray-600">días</p>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
@@ -175,7 +180,7 @@ export default function RRHHInformeRangoPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ background: '#020617', borderBottom: '2px solid #1e293b' }}>
-                    {['', 'Nombre', 'Rol', 'Contrato', 'Cédula', 'Días', 'HRS+', 'HRS NOC', 'REC NOC', 'REC DÍA', 'DOM.', 'Apro.', 'Pend.', 'Rech.'].map(h => (
+                    {['', 'Nombre', 'Rol', 'Contrato', 'Cédula', 'Días', 'HRS+', 'HRS NOC', 'REC NOC', 'REC DÍA', 'DOM/FEST', 'Apro.', 'Pend.', 'Rech.'].map(h => (
                       <th key={h} className="px-3 py-2.5 text-left text-xs font-bold uppercase tracking-wide" style={{ color: '#64748b' }}>{h}</th>
                     ))}
                   </tr>
@@ -218,10 +223,10 @@ export default function RRHHInformeRangoPage() {
                           <td className="px-3 py-2.5 font-bold" style={{ color: '#818cf8' }}>{fmt(p.hrsNoc)}</td>
                           <td className="px-3 py-2.5 font-bold" style={{ color: '#60a5fa' }}>{fmt(p.recargo)}</td>
                           <td className="px-3 py-2.5 font-bold" style={{ color: '#34d399' }}>{fmt(p.recargoDiurno)}</td>
-                          <td className="px-3 py-2.5">
-                            {p.diasDominical > 0
-                              ? <span className="px-1.5 py-0.5 rounded text-xs font-bold" style={{ background: 'rgba(34,197,94,0.2)', color: '#4ade80' }}>{p.diasDominical}</span>
-                              : <span className="text-gray-700">—</span>}
+                          <td className="px-3 py-2.5 text-center">
+                            {(p.diasDominical ?? 0) > 0
+                              ? <span className="inline-block px-2 py-0.5 rounded font-bold text-xs" style={{ background: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid #16a34a' }}>{p.diasDominical}</span>
+                              : <span className="text-slate-700">—</span>}
                           </td>
                           <td className="px-3 py-2.5 text-green-400 font-bold">{p.aprobadas}</td>
                           <td className="px-3 py-2.5 text-yellow-400">{p.pendientes}</td>
@@ -233,7 +238,7 @@ export default function RRHHInformeRangoPage() {
                               <table className="w-full text-xs">
                                 <thead>
                                   <tr>
-                                    {['Fecha', 'HRS+', 'HRS NOC', 'REC NOC', 'REC DÍA', 'DOM.', 'Estado', 'Aprobado por'].map(h => (
+                                    {['Fecha', 'HRS+', 'HRS NOC', 'REC NOC', 'REC DÍA', 'DOM/FEST', 'Estado', 'Aprobado por'].map(h => (
                                       <th key={h} className="px-2 py-1 text-left font-bold uppercase tracking-wide" style={{ color: '#475569' }}>{h}</th>
                                     ))}
                                   </tr>
@@ -250,8 +255,8 @@ export default function RRHHInformeRangoPage() {
                                         <td className="px-2 py-1.5" style={{ color: '#34d399' }}>{d.recargoDiurno > 0 ? fmt(d.recargoDiurno) : '—'}</td>
                                         <td className="px-2 py-1.5">
                                           {d.dominical
-                                            ? <span className="px-1.5 py-0.5 rounded text-xs font-bold" style={{ background: 'rgba(34,197,94,0.2)', color: '#4ade80' }}>DOM</span>
-                                            : <span className="text-gray-700">—</span>}
+                                            ? <span className="px-2 py-0.5 rounded font-bold" style={{ background: 'rgba(34,197,94,0.15)', color: '#4ade80', border: '1px solid #16a34a' }}>DOM</span>
+                                            : <span className="text-slate-700">—</span>}
                                         </td>
                                         <td className="px-2 py-1.5">
                                           <span className="px-2 py-0.5 rounded text-xs font-bold" style={{ background: s.bg, color: s.color }}>{d.estado}</span>

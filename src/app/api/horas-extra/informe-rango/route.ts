@@ -137,11 +137,21 @@ export async function GET(req: NextRequest) {
   const asistSet = new Set<string>()
 
   for (const a of asistencias ?? []) {
-    if (!a.hora_ingreso) continue
-
     const key      = `${a.cedula}_${a.fecha}`
     asistSet.add(key)
     const ov       = ovMap[key]
+
+    const esDominical = ov?.es_dominical ?? false
+    const hasManualExtended = ov && (
+      (ov.horas_nocturnas_manual  != null && Number(ov.horas_nocturnas_manual)  > 0) ||
+      (ov.recargo_nocturno_manual != null && Number(ov.recargo_nocturno_manual) > 0) ||
+      (ov.recargo_diurno_manual   != null && Number(ov.recargo_diurno_manual)   > 0) ||
+      esDominical
+    )
+
+    // Si no hay hora de ingreso y tampoco override manual extendido, no hay nada que reportar
+    if (!a.hora_ingreso && !hasManualExtended) continue
+
     const apro     = aproMap[key]
     const cedKey   = String(a.cedula)
     const info     = nombreMap[cedKey]
@@ -149,13 +159,6 @@ export async function GET(req: NextRequest) {
     const contrato = info?.contrato ?? 'Fijo'
 
     let hrsExtra: number, hrsNoc: number, recargo: number, recargoDiurno: number
-    const esDominical = ov?.es_dominical ?? false
-
-    const hasManualExtended = ov && (
-      (ov.horas_nocturnas_manual  != null && Number(ov.horas_nocturnas_manual)  > 0) ||
-      (ov.recargo_nocturno_manual != null && Number(ov.recargo_nocturno_manual) > 0) ||
-      (ov.recargo_diurno_manual   != null && Number(ov.recargo_diurno_manual)   > 0)
-    )
 
     if (hasManualExtended) {
       hrsExtra      = Number(ov.horas_extra_manual      ?? 0)
@@ -177,8 +180,8 @@ export async function GET(req: NextRequest) {
 
     if (!esDominical && hrsExtra === 0 && hrsNoc === 0 && recargo === 0 && recargoDiurno === 0) continue
 
-    const estado = apro ? (apro.rechazado ? 'Rechazado' : 'Aprobado') : 'Pendiente'
-    if (estado !== 'Aprobado' && !esDominical) continue
+    const estado = apro ? (apro.rechazado ? 'Rechazado' : 'Aprobado') : (esDominical ? 'Aprobado' : 'Pendiente')
+    if (estado !== 'Aprobado') continue
 
     if (!personaMap[cedKey]) {
       personaMap[cedKey] = {
@@ -211,12 +214,12 @@ export async function GET(req: NextRequest) {
     const hrsNoc        = Number(ov.horas_nocturnas_manual  ?? 0)
     const recargo       = Number(ov.recargo_nocturno_manual ?? 0)
     const recargoDiurno = Number(ov.recargo_diurno_manual   ?? 0)
-    const esDominical   = ov.es_dominical ?? false
+    const esDominical = ov.es_dominical ?? false
     if (!esDominical && hrsExtra === 0 && hrsNoc === 0 && recargo === 0 && recargoDiurno === 0) continue
 
     const apro   = aproMap[key]
-    const estado = apro ? (apro.rechazado ? 'Rechazado' : 'Aprobado') : 'Pendiente'
-    if (estado !== 'Aprobado' && !esDominical) continue
+    const estado = apro ? (apro.rechazado ? 'Rechazado' : 'Aprobado') : (esDominical ? 'Aprobado' : 'Pendiente')
+    if (estado !== 'Aprobado') continue
 
     const cedKey = String(ov.cedula)
     const info   = nombreMap[cedKey]
