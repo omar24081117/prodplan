@@ -132,22 +132,27 @@ export default function RRHHInformeRangoPage() {
       {/* Cards de totales */}
       {totales && (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
             {[
-              { label: 'Total HRS+',    value: fmt(totales.hrsExtra),       color: '#f97316' },
-              { label: 'Total HRS NOC', value: fmt(totales.hrsNoc),         color: '#818cf8' },
-              { label: 'Total REC NOC', value: fmt(totales.recargo),        color: '#60a5fa' },
-              { label: 'Total REC DIA', value: fmt(totales.recargoDiurno),  color: '#34d399' },
+              { label: 'Total HRS+',    value: fmt(totales.hrsExtra),       color: '#f97316', sub: 'horas' },
+              { label: 'Total HRS NOC', value: fmt(totales.hrsNoc),         color: '#818cf8', sub: 'horas' },
+              { label: 'Total REC NOC', value: fmt(totales.recargo),        color: '#60a5fa', sub: 'horas' },
+              { label: 'Total REC DIA', value: fmt(totales.recargoDiurno),  color: '#34d399', sub: 'horas' },
             ].map(c => (
               <div key={c.label} className="rounded-xl p-4" style={{ background: '#111827', border: '1px solid #1e293b' }}>
                 <p className="text-xs text-gray-500 mb-1">{c.label}</p>
                 <p className="text-2xl font-bold" style={{ color: c.color }}>{c.value}</p>
-                <p className="text-xs text-gray-600">horas</p>
+                <p className="text-xs text-gray-600">{c.sub}</p>
               </div>
             ))}
+            <div className="rounded-xl p-4" style={{ background: '#052e1a', border: '1px solid #16a34a' }}>
+              <p className="text-xs mb-1" style={{ color: '#4ade80' }}>Total DOM/FEST</p>
+              <p className="text-2xl font-bold" style={{ color: '#86efac' }}>{totales.diasDominical ?? 0}</p>
+              <p className="text-xs text-gray-600">días</p>
+            </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-3 mb-6">
+          <div className="grid grid-cols-3 gap-3 mb-6">
             <div className="rounded-xl p-4" style={{ background: '#052e16', border: '1px solid #166534' }}>
               <p className="text-xs text-green-600 mb-1">Días aprobados</p>
               <p className="text-2xl font-bold text-green-400">{totales.aprobadas}</p>
@@ -159,10 +164,6 @@ export default function RRHHInformeRangoPage() {
             <div className="rounded-xl p-4" style={{ background: '#1a0505', border: '1px solid #7f1d1d' }}>
               <p className="text-xs text-red-700 mb-1">Días rechazados</p>
               <p className="text-2xl font-bold text-red-400">{totales.rechazadas}</p>
-            </div>
-            <div className="rounded-xl p-4" style={{ background: '#052e1a', border: '1px solid #16a34a' }}>
-              <p className="text-xs mb-1" style={{ color: '#4ade80' }}>Dom / Festivos</p>
-              <p className="text-2xl font-bold" style={{ color: '#86efac' }}>{totales.diasDominical}</p>
             </div>
           </div>
 
